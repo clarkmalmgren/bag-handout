@@ -19,7 +19,6 @@ Splits a neighborhood into equal-house-count groups, each with a short closed wa
 | `npm run build` | `tsc --noEmit` then static build into `dist/` |
 | `npm test` | unit tests (Vitest; only `tests/**/*.test.ts`) |
 | `npm run e2e` | Playwright smoke test (starts `vite` on port 4173) |
-| `npx vite-node scripts/make-synthetic.ts out.json` | writes a synthetic 120-house project for demos (see the script header for its usage) |
 
 The e2e test needs a Chromium that Playwright can find (`npx playwright install chromium` once). To use an already-installed browser instead, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its path, for example `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome-headless-shell npm run e2e`. The test loads a synthetic project, so it does not need Overpass; map tiles are optional to it.
 
@@ -53,3 +52,5 @@ Advanced tuning (`crossingPenalty`, `weights`, `iterations`, `seed`, `secPerHous
 ## Real-area acceptance runbook
 
 See [docs/acceptance-runbook.md](docs/acceptance-runbook.md). **This runbook has NOT been executed**: it needs live Overpass access and a person judging the results against satellite imagery. The automated smoke test covers only the synthetic 120-house grid.
+
+Note: `scripts/make-synthetic.ts` (synthetic demo project writer) has no runner installed (no `vite-node`/`tsx`), and plain `node` cannot resolve its extensionless imports, so it is not documented as a command.
