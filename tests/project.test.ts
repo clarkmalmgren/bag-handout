@@ -71,3 +71,19 @@ describe('ringOf', () => {
     ]);
   });
 });
+
+describe('locks with unknown keys', () => {
+  it('load without throwing and match no segment', async () => {
+    const { buildModel } = await import('../src/model');
+    const { syntheticGrid } = await import('./fixtures/synthetic');
+    const g = syntheticGrid(3, 3, 2);
+    const s = emptyState();
+    s.osm = g.osm;
+    s.houses = g.houses;
+    s.locked = ['Main St:1', 'Row 0:9999-9998'];
+    const parsed = parseProject(serializeProject(s));
+    const m = buildModel(parsed.houses, parsed.osm!, 8);
+    const locked = new Set(parsed.locked);
+    expect(m.snaps.map((sn) => locked.has(m.graph.segments[sn.segment].key)).some(Boolean)).toBe(false);
+  });
+});

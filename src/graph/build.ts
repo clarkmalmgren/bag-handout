@@ -88,12 +88,41 @@ export function buildGraph(osm: OsmData): Graph {
     e.segment = sid;
     segments[sid].edgeIds.push(e.id);
   }
-  for (const s of segments) {
-    let minId = Infinity;
-    for (const eid of s.edgeIds) {
-      minId = Math.min(minId, osmIds[edges[eid].a], osmIds[edges[eid].b]);
+  // Segment key format (stable across rebuilds, independent of way order and edge numbering):
+  //   "<street>:<loOsmId>-<hiOsmId>"  where lo/hi are the sorted OSM ids of the chain's two end nodes
+  //   (a closed loop has no ends, so its smallest node id is used for both);
+  //   parallel segments of one street sharing the same two ends get "#1", "#2", ... appended, ordered by
+  //   their sorted edge list (the first keeps the bare key).
+  // Locks saved with an older key format simply no longer match any segment and are ignored.
+  const sigs: string[] = [];
+  const base: string[] = [];
+  for (const seg of segments) {
+    const degree = new Map<number, number>();
+    const pairs: string[] = [];
+    for (const eid of seg.edgeIds) {
+      const ia = osmIds[edges[eid].a];
+      const ib = osmIds[edges[eid].b];
+      degree.set(ia, (degree.get(ia) ?? 0) + 1);
+      degree.set(ib, (degree.get(ib) ?? 0) + 1);
+      pairs.push(ia < ib ? `${ia}-${ib}` : `${ib}-${ia}`);
     }
-    s.key = `${s.street}:${minId}`;
+    let ends = [...degree].filter(([, d]) => d !== 2).map(([n]) => n).sort((x, y) => x - y);
+    if (ends.length === 0) {
+      const lo = Math.min(...degree.keys());
+      ends = [lo, lo];
+    }
+    base.push(`${seg.street}:${ends[0]}-${ends[ends.length - 1]}`);
+    sigs.push(pairs.sort().join(','));
+  }
+  const groups = new Map<string, number[]>();
+  segments.forEach((seg, i) => {
+    const l = groups.get(base[i]) ?? [];
+    l.push(i);
+    groups.set(base[i], l);
+  });
+  for (const [k, ids] of groups) {
+    ids.sort((x, y) => (sigs[x] < sigs[y] ? -1 : sigs[x] > sigs[y] ? 1 : 0));
+    ids.forEach((sid, n) => { segments[sid].key = n === 0 ? k : `${k}#${n}`; });
   }
 
   return { coords, osmIds, index, edges, adj, segments };
