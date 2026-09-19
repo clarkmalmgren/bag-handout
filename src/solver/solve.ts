@@ -62,6 +62,13 @@ export function solve(p: SolveProblem, onProgress?: (iter: number, best: number)
   });
 }
 
+/** Route one group (closed loop over `members`, house indices). */
+export function routeGroup(distMatrix: Float32Array, houseCount: number, members: number[]): Tour {
+  const dist = matrixDist(distMatrix, houseCount);
+  const tour = solveTour(members, dist, { maxStarts: 6 });
+  return { order: rotateToStart(tour.order, dist), length: tour.length };
+}
+
 /** Fast path used after manual edits: re-route every group without changing membership. */
 export function routeGroups(
   distMatrix: Float32Array,
@@ -69,13 +76,13 @@ export function routeGroups(
   assign: number[],
   groups: number,
 ): Tour[] {
-  const dist = matrixDist(distMatrix, houseCount);
+  return membersOf(assign, groups).map((m) => routeGroup(distMatrix, houseCount, m));
+}
+
+export function membersOf(assign: number[], groups: number): number[][] {
   const members: number[][] = Array.from({ length: groups }, () => []);
   assign.forEach((g, h) => {
     if (g >= 0 && g < groups) members[g].push(h);
   });
-  return members.map((m) => {
-    const tour = solveTour(m, dist, { maxStarts: 6 });
-    return { order: rotateToStart(tour.order, dist), length: tour.length };
-  });
+  return members;
 }

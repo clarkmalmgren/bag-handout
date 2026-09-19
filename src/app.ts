@@ -2,7 +2,8 @@ import L from 'leaflet';
 import type { Store } from './state';
 import type { House, Tour } from './types';
 import { buildModel, canSolve, type Model } from './model';
-import { routeGroups, type SolveProblem } from './solver/solve';
+import { TourCache } from './tourCache';
+import { type SolveProblem } from './solver/solve';
 import { runSolve } from './ui/solveClient';
 import { groupStats } from './stats';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
@@ -34,6 +35,7 @@ export function initApp(ctx: {
   let modelOsm: unknown = null;
   let visible: House[] = [];
   let tours: Tour[] = [];
+  const tourCache = new TourCache();
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const status = (t: string) => { $('status').textContent = t; };
@@ -54,6 +56,7 @@ export function initApp(ctx: {
     if (key === modelKey && s.osm === modelOsm) return;
     modelKey = key;
     modelOsm = s.osm;
+    tourCache.clear(); // cached tours use house indices of the old model
     model = s.osm && visible.length > 0 ? buildModel(visible, s.osm, s.config.crossingPenalty) : null;
   }
 
@@ -75,9 +78,9 @@ export function initApp(ctx: {
     ($('groups') as HTMLInputElement).value = String(s.config.groups);
     const a = prepareAssignments();
     const groups = s.config.groups;
-    // Tours are always recomputed here (main thread) so the display is identical after a solve and after a manual edit.
+    // Only groups whose membership changed are re-routed; after a solve the cache holds the solver's own tours.
     tours = model && a.length > 0 && a.every((g) => g >= 0 && g < groups)
-      ? routeGroups(model.dist, visible.length, a, groups)
+      ? tourCache.routeAll(model.dist, visible.length, a, groups)
       : [];
     draw(a);
   }
@@ -150,6 +153,7 @@ export function initApp(ctx: {
         status('Result discarded: the project, group count or house set changed while solving. Solve again.');
         return;
       }
+      tourCache.seed(sol.assign, s.config.groups, sol.tours);
       store.update((st) => {
         houses.forEach((h, i) => { st.assignment[h.id] = sol.assign[i]; });
       });
