@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Polygon } from 'geojson';
-import { buildQuery, polyString, hashPolygon, fetchOverpass } from '../src/data/overpass';
+import { buildQuery, polyString, hashPolygon, fetchOverpass, cacheKey, CACHE_VERSION } from '../src/data/overpass';
 
 const poly: Polygon = {
   type: 'Polygon',
@@ -61,5 +61,79 @@ describe('fetchOverpass', () => {
   it('throws when every mirror fails', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 504, json: async () => ({}) });
     await expect(fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache: memCache() })).rejects.toThrow(/Overpass/);
+  });
+
+  const ok = { ok: true, status: 200, json: async () => body };
+  const soft = { ok: true, status: 200, json: async () => ({ remark: 'runtime error: Query timed out in "query" at line 1', elements: [] }) };
+  const softWithData = { ok: true, status: 200, json: async () => ({ remark: 'runtime error: Query ran out of memory', elements: body.elements }) };
+  const empty = { ok: true, status: 200, json: async () => ({ elements: [] }) };
+
+  it('treats a soft failure (runtime-error remark) as a failed mirror, does not cache it, and tries the next', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(soft).mockResolvedValueOnce(ok);
+    const cache = memCache();
+    const r = await fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(r.houses).toHaveLength(1);
+    expect(await cache.get(cacheKey(poly))).toEqual(r); // the good result, not the soft failure
+  });
+
+  it('rejects a remark about errors even when elements are present', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(softWithData);
+    const cache = memCache();
+    await expect(fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache })).rejects.toThrow(/out of memory/);
+    expect(await cache.get(cacheKey(poly))).toBeUndefined();
+  });
+
+  it('never caches an empty result and throws when all mirrors return it', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(empty);
+    const cache = memCache();
+    await expect(fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache })).rejects.toThrow(/empty result/);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await cache.get(cacheKey(poly))).toBeUndefined();
+  });
+
+  it('throws a clear error for a malformed body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ hello: 1 }) });
+    await expect(fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache: memCache() })).rejects.toThrow(/malformed response/);
+    const nul = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => null });
+    await expect(fetchOverpass(poly, { fetchImpl: nul as never, cache: memCache() })).rejects.toThrow(/malformed response/);
+  });
+
+  it('force bypasses the cache read but refreshes the entry', async () => {
+    const cache = memCache();
+    await cache.set(cacheKey(poly), { osm: { nodes: [], ways: [] }, houses: [] });
+    const fetchImpl = vi.fn().mockResolvedValue(ok);
+    const r = await fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache, force: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(r.houses).toHaveLength(1);
+    expect(await cache.get(cacheKey(poly))).toEqual(r);
+  });
+
+  it('prefixes the cache key with a version', () => {
+    expect(cacheKey(poly)).toBe(`overpass:${CACHE_VERSION}:${hashPolygon(poly)}`);
+    expect(CACHE_VERSION).toMatch(/^v\d+$/);
+  });
+
+  it('still returns a successful fetch when the cache write throws', async () => {
+    const cache = { get: async () => undefined, set: async () => { throw new Error('quota'); } };
+    const fetchImpl = vi.fn().mockResolvedValue(ok);
+    const r = await fetchOverpass(poly, { fetchImpl: fetchImpl as never, cache });
+    expect(r.houses).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches when the cache read throws', async () => {
+    const cache = { get: async () => { throw new Error('idb'); }, set: async () => {} };
+    const r = await fetchOverpass(poly, { fetchImpl: vi.fn().mockResolvedValue(ok) as never, cache });
+    expect(r.houses).toHaveLength(1);
+  });
+
+  it('fetches uncached when IndexedDB is unavailable', async () => {
+    vi.resetModules();
+    vi.doMock('idb-keyval', () => { throw new Error('IndexedDB unavailable'); });
+    const mod = await import('../src/data/overpass');
+    const r = await mod.fetchOverpass(poly, { fetchImpl: vi.fn().mockResolvedValue(ok) as never });
+    expect(r.houses).toHaveLength(1);
+    vi.doUnmock('idb-keyval');
   });
 });
