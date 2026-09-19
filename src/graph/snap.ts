@@ -11,6 +11,8 @@ export interface Snap {
   offset: number;
 }
 
+export const SAME_STREET_TOLERANCE_M = 15;
+
 export function snapHouses(houses: House[], g: Graph): Snap[] {
   if (houses.length === 0) return [];
   if (g.edges.length === 0) throw new Error('graph has no edges; cannot snap houses');
@@ -22,29 +24,40 @@ export function snapHouses(houses: House[], g: Graph): Snap[] {
     let bd = Infinity;
     let bt = 0;
     let bs: 1 | -1 = 1;
-    // First pass: find closest edge on the same street
+    let bestSameStreet = -1;
+    let bestSameStreetDist = Infinity;
+    let btSameStreet = 0;
+    let bsSameStreet: 1 | -1 = 1;
+
+    // Single pass: track best overall and best same-street candidates
     for (const e of g.edges) {
-      if (e.street !== h.street) continue;
       const r = projectToSegment(p, P[e.a], P[e.b]);
+
+      // Track best overall edge
       if (r.dist < bd) {
         bd = r.dist;
         best = e.id;
         bt = r.t;
         bs = r.side;
       }
-    }
-    // If no edge on the street found, search all edges (shouldn't happen)
-    if (best === -1) {
-      for (const e of g.edges) {
-        const r = projectToSegment(p, P[e.a], P[e.b]);
-        if (r.dist < bd) {
-          bd = r.dist;
-          best = e.id;
-          bt = r.t;
-          bs = r.side;
-        }
+
+      // Track best same-street edge (if street matches)
+      if (e.street === h.street && r.dist < bestSameStreetDist) {
+        bestSameStreetDist = r.dist;
+        bestSameStreet = e.id;
+        btSameStreet = r.t;
+        bsSameStreet = r.side;
       }
     }
+
+    // Use same-street edge only if within tolerance of best overall distance
+    if (bestSameStreet !== -1 && bestSameStreetDist <= bd + SAME_STREET_TOLERANCE_M) {
+      best = bestSameStreet;
+      bd = bestSameStreetDist;
+      bt = btSameStreet;
+      bs = bsSameStreet;
+    }
+
     const e = g.edges[best];
     const a = g.coords[e.a];
     const b = g.coords[e.b];
