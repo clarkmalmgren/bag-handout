@@ -66,3 +66,21 @@ describe('buildRows', () => {
     expect(buildRows({ houses, model: null, tours: [{ order: [0], length: 0 }] })).toEqual([]);
   });
 });
+
+describe('formula injection', () => {
+  const addr = (a: string) => toCsv([{ group: 1, order: 1, address: a, lat: 42.1, lon: -88.2 }]).split('\r\n')[1];
+  it('prefixes a quote to dangerous leading characters', () => {
+    expect(addr('= evil')).toBe("1,1,'= evil,42.1,-88.2");
+    expect(addr('=HYPERLINK("x")')).toBe(`1,1,"'=HYPERLINK(""x"")",42.1,-88.2`);
+    expect(addr('+1')).toBe("1,1,'+1,42.1,-88.2");
+    expect(addr('@SUM(A1)')).toBe("1,1,'@SUM(A1),42.1,-88.2");
+    expect(addr('-cmd')).toBe("1,1,'-cmd,42.1,-88.2");
+    expect(addr('\tx')).toBe("1,1,'\tx,42.1,-88.2");
+    expect(addr('\rx')).toBe('1,1,"\'\rx",42.1,-88.2');
+  });
+  it('leaves ordinary addresses and numbers alone', () => {
+    expect(addr('123 Main St')).toBe('1,1,123 Main St,42.1,-88.2');
+    expect(addr('-5 Odd St')).toBe('1,1,-5 Odd St,42.1,-88.2');
+    expect(addr('Main St (no address)')).toBe('1,1,Main St (no address),42.1,-88.2');
+  });
+});

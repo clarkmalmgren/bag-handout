@@ -32,8 +32,16 @@ export function buildRows(view: Pick<AppView, 'houses' | 'model' | 'tours'>): Cs
   return rows;
 }
 
+/**
+ * Neutralise spreadsheet formula injection: a text value starting with = + @ tab CR, or with - followed by a
+ * non-digit, gets a leading single quote. Ordinary addresses (and negative numbers) are left alone.
+ */
+export function neutralise(s: string): string {
+  return /^([=+@\t\r]|-(?!\d))/.test(s) ? `'${s}` : s;
+}
+
 const quote = (v: string | number): string => {
-  const s = String(v);
+  const s = typeof v === 'string' ? neutralise(v) : String(v);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
