@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bag Handout Planner</title>
+    <style>
+      html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+      #app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 1fr 320px; height: 100%; }
+      #toolbar { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px; background: #f3f4f6; border-bottom: 1px solid #d1d5db; }
+      #toolbar label { font-size: 13px; }
+      #toolbar input[type=number] { width: 4em; }
+      #status { margin-left: auto; font-size: 13px; color: #374151; }
+      #map { min-height: 0; }
+      #panel { overflow: auto; padding: 8px; border-left: 1px solid #d1d5db; font-size: 13px; }
+      .group-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
+      .swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+      #print-root { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="toolbar">
+        <button id="fetch" title="Fetch houses and roads for the drawn boundary">Fetch houses</button>
+        <label>Groups <input id="groups" type="number" min="2" max="20" value="6" /></label>
+        <button id="solve">Solve</button>
+        <button id="reopt" title="Re-optimize from current assignment, keeping locked streets">Re-optimize</button>
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+        <button id="save">Save project</button>
+        <label>Load project <input id="load-input" type="file" accept="application/json,.json" /></label>
+        <button id="export-print">Print view</button>
+        <button id="export-csv">Export CSV</button>
+        <span id="status">Draw a boundary to begin.</span>
+      </div>
+      <div id="map"></div>
+      <div id="panel"></div>
+    </div>
+    <div id="print-root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
