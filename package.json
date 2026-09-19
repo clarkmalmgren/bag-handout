@@ -1,8 +1,7 @@
 {
   "name": "bag-handout",
   "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Static browser tool that splits a neighborhood into equal-house-count groups with short walking loops for a Cub Scout bag handout.",
   "directories": {
     "doc": "docs"
   },
@@ -13,8 +12,6 @@
     "preview": "vite preview",
     "e2e": "playwright test"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
@@ -32,5 +29,5 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
   },
-  "private": "true"
+  "private": true
 }
