@@ -46,4 +46,22 @@ describe('disconnected houses', () => {
     expect(canSolve(null).ok).toBe(false);
     expect(canSolve(buildModel(grid.houses, grid.osm, 8))).toEqual({ ok: true, message: '' });
   });
+
+  it('sizes components by houses: a house-free detached footway is not the main network', () => {
+    const ids = Array.from({ length: 40 }, (_, i) => 5000 + i);
+    const pond: OsmData = {
+      nodes: [...grid.osm.nodes, ...ids.map((id, i): [number, number, number] => [id, 42.2, -88.3 + i * 0.0001])],
+      ways: [...grid.osm.ways, { id: 998, name: 'Pond Trail', highway: 'footway', nodes: ids }],
+    };
+    const m = buildModel(grid.houses, pond, 8);
+    expect(m.disconnected).toEqual([]);
+    expect(canSolve(m).ok).toBe(true);
+    expect(() => solve(problem(m, 50))).not.toThrow();
+  });
+
+  it('handles a model with no houses', () => {
+    const m = buildModel([], grid.osm, 8);
+    expect(m.disconnected).toEqual([]);
+    expect(canSolve(m).ok).toBe(true);
+  });
 });

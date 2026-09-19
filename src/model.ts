@@ -24,11 +24,20 @@ export function buildModel(houses: House[], osm: OsmData, crossingPenalty: numbe
   const xy = houses.map(proj);
 
   const comp = connectedComponents(graph);
+  // Main component = the one holding the most snapped houses (ties: lowest index); node counts only
+  // decide when there are no houses at all, so house-free detached ways never count as the network.
   const sizes = new Map<number, number>();
-  for (const c of comp) sizes.set(c, (sizes.get(c) ?? 0) + 1);
+  if (snaps.length > 0) {
+    for (const s of snaps) {
+      const c = comp[graph.edges[s.edge].a];
+      sizes.set(c, (sizes.get(c) ?? 0) + 1);
+    }
+  } else {
+    for (const c of comp) sizes.set(c, (sizes.get(c) ?? 0) + 1);
+  }
   let main = -1;
   let mainSize = -1;
-  for (const [c, n] of sizes) {
+  for (const [c, n] of [...sizes].sort((x, y) => x[0] - y[0])) {
     if (n > mainSize) {
       mainSize = n;
       main = c;
