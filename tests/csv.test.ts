@@ -36,6 +36,9 @@ describe('addressOf', () => {
     expect(addressOf(house('b', '(no address)', true), model, 2)).toBe('Elm St (no address)');
     expect(addressOf(house('b', '(no address)', false), model, 2)).toBe('Elm St (no address)');
   });
+  it('does not throw when the house has no snap', () => {
+    expect(addressOf(house('b', '(no address)', true), model, 99)).toBe('unnamed street (no address)');
+  });
   it('prefers the house own street, then "unnamed street"', () => {
     expect(addressOf(house('b', '(no address)', true, 'Pine'), model, 2)).toBe('Pine (no address)');
     expect(addressOf(house('b', '(no address)', true), model, 3)).toBe('unnamed street (no address)');

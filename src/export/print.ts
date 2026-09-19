@@ -5,6 +5,16 @@ import type { Config } from '../types';
 import { groupStats } from '../stats';
 import { colorOf } from '../ui/groups';
 import { addressOf } from './csv';
+import { fitBox, type LatLngPair } from './bounds';
+
+const liveMaps = new Set<L.Map>();
+/** number of print maps currently alive (for tests / leak checks) */
+export const liveMapCount = (): number => liveMaps.size;
+
+function disposeMaps(): void {
+  liveMaps.forEach((m) => m.remove());
+  liveMaps.clear();
+}
 
 const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
@@ -18,9 +28,10 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 }
 
 /** Fit the map, then add the satellite layer so its tiles load; resolves on 'load' or after 8 s. */
-function mountMap(div: HTMLElement, bounds: L.LatLngBounds): { map: L.Map; ready: Promise<void> } {
-  const map = L.map(div, { zoomControl: false, attributionControl: false, preferCanvas: true, zoomSnap: 0.25 });
-  map.fitBounds(bounds.pad(0.15));
+function mountMap(div: HTMLElement, points: LatLngPair[]): { map: L.Map; ready: Promise<void> } {
+  const map = L.map(div, { zoomControl: false, attributionControl: false, preferCanvas: true, zoomSnap: 0.25, maxZoom: 19 });
+  liveMaps.add(map);
+  map.fitBounds(fitBox(points), { maxZoom: 18, padding: [24, 24] });
   const tiles = L.tileLayer(SAT, { maxZoom: 19, crossOrigin: true });
   const ready = new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, 8000);
@@ -45,6 +56,7 @@ function table(rows: string[][], header: string[]): HTMLTableElement {
 export async function openPrintView(root: HTMLElement, view: AppView, cfg: Config): Promise<void> {
   const { model, houses, assign, tours } = view;
   if (!model || tours.length === 0) throw new Error('Solve first');
+  disposeMaps();
   root.replaceChildren();
   root.hidden = false;
 
@@ -53,7 +65,7 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
   printBtn.disabled = true;
   printBtn.addEventListener('click', () => window.print());
   const closeBtn = h('button', undefined, 'Close');
-  closeBtn.addEventListener('click', () => { root.hidden = true; root.replaceChildren(); });
+  closeBtn.addEventListener('click', () => { disposeMaps(); root.hidden = true; root.replaceChildren(); });
   bar.append(printBtn, closeBtn);
   root.append(bar);
 
@@ -61,7 +73,7 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
   const sizes = tours.map((t) => t.order.length);
   const stats = groupStats(sizes, tours.map((t) => t.length), cfg);
   const ready: Promise<void>[] = [];
-  const latlng = (i: number) => [houses[i].lat, houses[i].lon] as L.LatLngTuple;
+  const latlng = (i: number) => [houses[i].lat, houses[i].lon] as LatLngPair;
 
   // Page 1: overview map + legend table.
   const overview = h('section', 'print-page');
@@ -75,7 +87,7 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
     ),
   );
   root.append(overview);
-  const om = mountMap(overviewMap, L.latLngBounds(houses.map((_, i) => latlng(i))));
+  const om = mountMap(overviewMap, houses.map((_, i) => latlng(i)));
   ready.push(om.ready);
   houses.forEach((_, i) => {
     L.circleMarker(latlng(i), { radius: 3, color: '#fff', weight: 1, fillColor: colorOf(assign[i]), fillOpacity: 1 }).addTo(om.map);
@@ -106,7 +118,7 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
     root.append(page);
 
     const pts = t.order.map(latlng);
-    const gm = mountMap(mapDiv, L.latLngBounds(pts));
+    const gm = mountMap(mapDiv, pts);
     ready.push(gm.ready);
     L.polyline([...pts, pts[0]], { color: colorOf(g), weight: 3, dashArray: '6 6' }).addTo(gm.map);
     t.order.forEach((idx, k) => {

@@ -15,7 +15,7 @@ const NO_ADDRESS = '(no address)';
 
 export function addressOf(house: House, model: Model, index: number): string {
   if (!house.flagged && house.label && house.label !== NO_ADDRESS) return house.label;
-  const street = house.street || model.graph.segments[model.snaps[index].segment]?.street || 'unnamed street';
+  const street = house.street || model.graph.segments[model.snaps[index]?.segment ?? -1]?.street || 'unnamed street';
   return `${street} (no address)`;
 }
 
