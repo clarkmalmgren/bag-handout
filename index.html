@@ -12,9 +12,6 @@
       #toolbar input[type=number] { width: 4em; }
       #status { margin-left: auto; font-size: 13px; color: #374151; }
       #map { min-height: 0; }
-      #panel { overflow: auto; padding: 8px; border-left: 1px solid #d1d5db; font-size: 13px; }
-      .group-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
-      .swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
       #print-root { display: none; }
     </style>
   </head>
@@ -23,7 +20,7 @@
       <div id="toolbar">
         <button id="fetch" title="Fetch houses and roads for the drawn boundary">Fetch houses</button>
         <button id="add-house" title="Click the map to add a house">Add house</button>
-        <label>Groups <input id="groups" type="number" min="2" max="20" value="6" /></label>
+        <label>Groups <input id="groups" type="number" min="2" max="12" value="6" /></label>
         <button id="solve">Solve</button>
         <button id="reopt" title="Re-optimize from current assignment, keeping locked streets">Re-optimize</button>
         <button id="undo">Undo</button>
@@ -35,9 +32,9 @@
         <span id="status">Draw a boundary to begin.</span>
       </div>
       <div id="map"></div>
-      <div id="panel"></div>
+      <aside id="panel"></aside>
     </div>
-    <div id="print-root"></div>
+    <div id="print-root" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

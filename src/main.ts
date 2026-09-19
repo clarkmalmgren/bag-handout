@@ -1,15 +1,15 @@
-import L from 'leaflet';
 import { createMap, showBoundary } from './ui/map';
 import { parseProject, serializeProject } from './project';
 import { Store, emptyState } from './state';
 import { fetchOverpass } from './data/overpass';
-import { HouseEditor, renderHouseDots } from './ui/houseEdit';
+import { HouseEditor } from './ui/houseEdit';
+import { initApp } from './app';
+import './style.css';
 
 const store = new Store(emptyState());
 
 const mapEl = document.getElementById('map') as HTMLElement;
 const statusEl = document.getElementById('status') as HTMLElement;
-const groupsInput = document.getElementById('groups') as HTMLInputElement;
 
 function setStatus(msg: string): void {
   statusEl.textContent = msg;
@@ -25,7 +25,6 @@ const { map, drawn } = createMap(mapEl, (poly) => {
   setStatus('Boundary set. Fetch houses next.');
 });
 
-const houseLayer = L.layerGroup().addTo(map);
 const houseEditor = new HouseEditor(map, store);
 
 function status(text: string): void {
@@ -37,11 +36,7 @@ function visibleHouses() {
   return store.state.houses.filter((h) => !removed.has(h.id));
 }
 
-function render(): void {
-  renderHouseDots(houseLayer, visibleHouses(), (id) => houseEditor.remove(id));
-}
-
-store.subscribe(render);
+initApp({ store, map, removeHouse: (id) => houseEditor.remove(id) });
 
 map.on('bagboundarycleared', () => {
   store.update(
@@ -51,17 +46,6 @@ map.on('bagboundarycleared', () => {
     { undoable: false },
   );
   setStatus('Boundary cleared.');
-});
-
-groupsInput.addEventListener('change', () => {
-  const n = Math.max(2, Math.min(20, Number(groupsInput.value) || 6));
-  groupsInput.value = String(n);
-  store.update(
-    (s) => {
-      s.config.groups = n;
-    },
-    { undoable: false },
-  );
 });
 
 document.getElementById('save')!.addEventListener('click', () => {
@@ -81,8 +65,10 @@ document.getElementById('load-input')!.addEventListener('change', async (ev) => 
   if (!file) return;
   try {
     store.replace(parseProject(await file.text()));
-    groupsInput.value = String(store.state.config.groups);
     showBoundary(map, drawn, store.state.boundary);
+    if (!store.state.boundary && store.state.houses.length > 0) {
+      map.fitBounds(store.state.houses.map((h) => [h.lat, h.lon] as [number, number]));
+    }
     setStatus(`Loaded: ${store.state.houses.length} houses`);
   } catch (err) {
     setStatus(`Could not load project: ${(err as Error).message}`);
@@ -90,9 +76,6 @@ document.getElementById('load-input')!.addEventListener('change', async (ev) => 
     input.value = '';
   }
 });
-
-document.getElementById('undo')!.addEventListener('click', () => store.undo());
-document.getElementById('redo')!.addEventListener('click', () => store.redo());
 
 document.getElementById('add-house')!.addEventListener('click', (e) => {
   const on = houseEditor.toggle();

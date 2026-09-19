@@ -1,0 +1,5 @@
+#panel { overflow: auto; padding: 8px; border-left: 1px solid #d1d5db; font: 13px system-ui, sans-serif; }
+.group-row { display: grid; grid-template-columns: 14px 70px 80px 70px 60px 50px; gap: 6px; align-items: center; padding: 3px 0; }
+.chip { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.delta.bad { background: #c62828; color: #fff; border-radius: 8px; padding: 0 6px; text-align: center; }
+.warn { background: #fff4e5; border-left: 3px solid #f58231; padding: 4px 6px; margin-bottom: 6px; }
