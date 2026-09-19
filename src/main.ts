@@ -1,7 +1,7 @@
 import { createMap, showBoundary } from './ui/map';
 import { parseProject, serializeProject } from './project';
 import { Store, emptyState } from './state';
-import { fetchOverpass } from './data/overpass';
+import { fetchHouseData } from './data/houseSource';
 import { HouseEditor } from './ui/houseEdit';
 import { initApp } from './app';
 import { wireExports } from './export/wire';
@@ -86,9 +86,9 @@ async function fetchHouses(force: boolean): Promise<void> {
     setStatus('Fetch cancelled.');
     return;
   }
-  setStatus(force ? 'Re-fetching from OpenStreetMap (ignoring cache)…' : 'Fetching from OpenStreetMap…');
+  setStatus(force ? 'Re-fetching houses and roads (ignoring cache)…' : 'Fetching houses (Kane County parcels) and roads (OpenStreetMap)…');
   try {
-    const r = await fetchOverpass(boundary, { force });
+    const r = await fetchHouseData(boundary, { force });
     store.update((s) => {
       s.osm = r.osm;
       const merged = mergeFetched(r.houses, s.houses, s.removed);
@@ -97,7 +97,12 @@ async function fetchHouses(force: boolean): Promise<void> {
       s.assignment = {}; // Undo restores this
     });
     const flagged = r.houses.filter((h) => h.flagged).length;
-    setStatus(`Loaded: ${visibleHouses(store.state).length} houses (${flagged} without an address, shown in orange)`);
+    const shown = visibleHouses(store.state).length;
+    if (r.source === 'kane') {
+      setStatus(`Found ${r.houses.length} houses from Kane County parcels (all with addresses); ${shown} shown after your edits`);
+    } else {
+      setStatus(`${r.note}; using OpenStreetMap: ${r.houses.length} buildings, ${flagged} flagged without address (shown in orange); ${shown} shown`);
+    }
   } catch (e) {
     setStatus(`Fetch failed: ${(e as Error).message}`);
   }
