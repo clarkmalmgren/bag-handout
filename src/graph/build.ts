@@ -115,7 +115,7 @@ export function buildGraph(osm: OsmData): Graph {
     sigs.push(pairs.sort().join(','));
   }
   const groups = new Map<string, number[]>();
-  segments.forEach((seg, i) => {
+  segments.forEach((_seg, i) => {
     const l = groups.get(base[i]) ?? [];
     l.push(i);
     groups.set(base[i], l);
