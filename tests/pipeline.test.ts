@@ -148,3 +148,27 @@ describe('anneal invariants', () => {
     expect(s8).toBeLessThanOrEqual(s3 + 1e-6);
   });
 });
+
+describe('solve pipeline at ~500 houses', () => {
+  const big = syntheticGrid(8, 8, 5); // 8 rows x 7 blocks x 5 per side x 2 = 560 houses
+  const bm = buildModel(big.houses, big.osm, 8);
+  const n = big.houses.length;
+  const bp = (iterations: number): SolveProblem => ({
+    distMatrix: bm.dist, houseCount: n, groups: 6, segmentOf: bm.segmentOf, xy: bm.xy,
+    weights: DEFAULT_WEIGHTS, seed: 1, iterations,
+  });
+
+  it('balances within +-2, returns permutation tours and beats the seed by 3%+ at 8000 iterations', { timeout: 30_000 }, () => {
+    expect(n).toBeGreaterThanOrEqual(400);
+    const seedSol = solve(bp(0));
+    const sol = solve(bp(8000));
+    const sizes = new Array<number>(6).fill(0);
+    sol.assign.forEach((g) => sizes[g]++);
+    sizes.forEach((s) => expect(Math.abs(s - n / 6)).toBeLessThanOrEqual(2));
+    for (let g = 0; g < 6; g++) {
+      const members = sol.assign.map((x, i) => (x === g ? i : -1)).filter((i) => i >= 0);
+      expect([...sol.tours[g].order].sort((a, b) => a - b)).toEqual(members);
+    }
+    expect(sol.score).toBeLessThan(0.97 * seedSol.score);
+  });
+});
