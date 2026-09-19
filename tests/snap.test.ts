@@ -47,7 +47,9 @@ describe('snapHouses', () => {
 
 describe('snapHouses tolerance and fallback behavior', () => {
   it('snaps house with empty street name to the specific nearest edge', () => {
-    // Simple 2-edge fixture; house positioned near Oak St
+    // Oak St at lat 42, Main St at lat 42.0005, house at lat 42.0001
+    // Distance to Oak St: |42.0001 - 42| * 111km ≈ 11.1m (nearest)
+    // Distance to Main St: |42.0005 - 42.0001| * 111km ≈ 44.4m (far away)
     const g = buildGraph({
       nodes: [
         [1, 42, -88.3],
@@ -62,7 +64,7 @@ describe('snapHouses tolerance and fallback behavior', () => {
     });
     const house = {
       id: 'empty_street',
-      lat: 42.00025,
+      lat: 42.0001,
       lon: -88.299,
       label: 'No street name',
       street: '',
@@ -71,7 +73,7 @@ describe('snapHouses tolerance and fallback behavior', () => {
     };
     const snaps = snapHouses([house], g);
     expect(snaps).toHaveLength(1);
-    // Must snap to Oak St (edge 0), the nearest edge
+    // Must snap to Oak St (edge 0), the clearly nearest edge
     expect(snaps[0].edge).toBe(0);
     expect(g.edges[0].street).toBe('Oak St');
   });
@@ -123,8 +125,8 @@ describe('snapHouses tolerance and fallback behavior', () => {
     });
     // House positioned at lat 42.00005 (very close to Oak St at lat 42)
     // Distance to Oak St ≈ 5.6m (perpendicular to edge)
-    // Distance to Main St ≈ 49m (perpendicular to edge at lat 42.00045)
-    // So Main St is >15m beyond Oak St, should be rejected by tolerance
+    // Distance to Main St ≈ 44.5m (perpendicular to edge at lat 42.00045)
+    // So Main St is ~38.9m beyond Oak St, well beyond 15m tolerance
     const house = {
       id: 'test_far_same_street',
       lat: 42.00005,
@@ -143,24 +145,26 @@ describe('snapHouses tolerance and fallback behavior', () => {
   });
 
   it('accepts same-street edge within 15m tolerance of nearest edge', () => {
-    // Oak St at lat 42, Main St at lat 42.00025 (=27.8m apart)
-    // House at lat 42.00015 is ~16.7m from Oak St and ~11m from Main St
-    // Oak St is nearer, Main St is only 11m beyond → within 15m tolerance → pick Main St
+    // CRITICAL: Tests that tolerance logic is ACTIVE. Nearest edge is different street.
+    // Oak St at lat 42, Main St at lat 42.00023, house at lat 42.00005
+    // Distance to Oak St: |42.00005 - 42| * 111km ≈ 5.55m (nearest, different street)
+    // Distance to Main St: |42.00023 - 42.00005| * 111km ≈ 20m (same street, but 14.5m beyond nearest)
+    // Main St is within 15m tolerance, should win over Oak St despite Oak being nearer
     const g = buildGraph({
       nodes: [
         [1, 42, -88.3],
         [2, 42, -88.298],
-        [3, 42.00025, -88.3],
-        [4, 42.00025, -88.298],
+        [3, 42.00023, -88.3],
+        [4, 42.00023, -88.298],
       ],
       ways: [
-        { id: 1, name: 'Oak St', highway: 'residential', nodes: [1, 2] },     // Edge 0
-        { id: 2, name: 'Main St', highway: 'residential', nodes: [3, 4] },    // Edge 1
+        { id: 1, name: 'Oak St', highway: 'residential', nodes: [1, 2] },     // Edge 0: nearest
+        { id: 2, name: 'Main St', highway: 'residential', nodes: [3, 4] },    // Edge 1: within tolerance
       ],
     });
     const house = {
       id: 'within_tolerance',
-      lat: 42.00015,
+      lat: 42.00005,
       lon: -88.299,
       label: 'Main St House',
       street: 'Main St',
@@ -169,7 +173,8 @@ describe('snapHouses tolerance and fallback behavior', () => {
     };
     const snaps = snapHouses([house], g);
     expect(snaps).toHaveLength(1);
-    // Should pick Main St (edge 1) because it's within 15m tolerance of nearest edge
+    // Must pick Main St (edge 1) because within 15m tolerance, despite Oak being nearest
+    // This FAILS if tolerance logic is disabled (plain nearest-edge picks Oak)
     expect(snaps[0].edge).toBe(1);
     expect(g.edges[1].street).toBe('Main St');
   });
