@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseOverpass } from '../src/data/parse';
+import { parseOverpass, type OverpassElement } from '../src/data/parse';
+import { buildGraph } from '../src/graph/build';
+import { connectedComponents } from '../src/graph/shortest';
 
 const elements = [
   { type: 'node', id: 1, lat: 42.0, lon: -88.3 },
@@ -43,5 +45,33 @@ describe('parseOverpass', () => {
 
   it('collects address nodes', () => {
     expect(p.addrNodes).toEqual([{ id: 30, pos: { lat: 42.002, lon: -88.3 }, number: '9', street: 'Elm St' }]);
+  });
+});
+
+describe('ways with a node missing from the response', () => {
+  const els = [
+    { type: 'node', id: 1, lat: 42, lon: -88.3 },
+    { type: 'node', id: 2, lat: 42, lon: -88.299 },
+    { type: 'node', id: 4, lat: 42, lon: -88.297 },
+    { type: 'node', id: 5, lat: 42, lon: -88.296 },
+    { type: 'way', id: 7, nodes: [1, 2, 3, 4, 5], tags: { highway: 'residential', name: 'Gap St' } },
+  ] as OverpassElement[];
+
+  it('splits the way at the gap instead of bridging it', () => {
+    const p = parseOverpass({ elements: els });
+    expect(p.osm.ways.map((w) => w.nodes)).toEqual([[1, 2], [4, 5]]);
+  });
+
+  it('parse -> buildGraph has no edge between the neighbours of the missing node', () => {
+    const g = buildGraph(parseOverpass({ elements: els }).osm);
+    expect(g.edges).toHaveLength(2);
+    const pairs = g.edges.map((e) => [g.osmIds[e.a], g.osmIds[e.b]].sort().join('-')).sort();
+    expect(pairs).toEqual(['1-2', '4-5']);
+    expect(connectedComponents(g).filter((c, i, a) => a.indexOf(c) === i)).toHaveLength(2);
+  });
+
+  it('drops a one-node remainder', () => {
+    const p = parseOverpass({ elements: [els[0], els[3], { type: 'way', id: 8, nodes: [1, 3, 5], tags: { highway: 'residential' } }] as OverpassElement[] });
+    expect(p.osm.ways).toEqual([]);
   });
 });

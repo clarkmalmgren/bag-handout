@@ -35,8 +35,18 @@ export function parseOverpass(json: { elements: OverpassElement[] }): ParsedOver
     const tags = el.tags ?? {};
     if (tags.highway) {
       if (SKIP_HIGHWAY.has(tags.highway) || SKIP_SERVICE.has(tags.service ?? '')) continue;
-      const nodes = el.nodes.filter((n) => pos.has(n));
-      if (nodes.length >= 2) ways.push({ id: el.id, name: tags.name ?? '', highway: tags.highway, nodes });
+      // A node missing from the response is a gap in the road: split the way there instead of filtering the id
+      // out, which would silently bridge the gap with a bogus edge between its neighbours. Pieces share the way id.
+      let run: number[] = [];
+      const flush = () => {
+        if (run.length >= 2) ways.push({ id: el.id, name: tags.name ?? '', highway: tags.highway!, nodes: run });
+        run = [];
+      };
+      for (const n of el.nodes) {
+        if (pos.has(n)) run.push(n);
+        else flush();
+      }
+      flush();
     } else if (tags.building || tags['addr:housenumber']) {
       const ring = el.nodes.map((n) => pos.get(n)).filter((p): p is LatLon => !!p);
       if (ring.length >= 3) buildings.push({ id: el.id, ring, tags });
