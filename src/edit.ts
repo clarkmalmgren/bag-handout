@@ -31,11 +31,18 @@ export interface SolveContext {
   groups: number;
   modelKey: string;
   osm: unknown;
+  /** inputSignature() of the mutable inputs (assignment, locked, removed) */
+  inputs: string;
 }
 
-/** True when the world a solve started in is gone (different project, group count, house set or road data). */
+/** Cheap signature of the user-editable solver inputs; any manual edit or undo during a solve changes it. */
+export function inputSignature(s: { assignment: Record<string, number>; locked: string[]; removed: string[] }): string {
+  return JSON.stringify(s.assignment) + '|' + s.locked.join('\u0001') + '|' + s.removed.join('\u0001');
+}
+
+/** True when the world a solve started in is gone (different project, group count, house set, road data, or an edit/undo of assignment, locks or removals). */
 export function solveIsStale(start: SolveContext, now: SolveContext): boolean {
-  return start.state !== now.state || start.groups !== now.groups || start.modelKey !== now.modelKey || start.osm !== now.osm;
+  return start.state !== now.state || start.groups !== now.groups || start.modelKey !== now.modelKey || start.osm !== now.osm || start.inputs !== now.inputs;
 }
 
 /**

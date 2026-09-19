@@ -8,7 +8,7 @@ import { runSolve } from './ui/solveClient';
 import { groupStats } from './stats';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
 import { colorOf, renderPanel } from './ui/groups';
-import { adoptNearest, solveIsStale, visibleHouses } from './edit';
+import { adoptNearest, inputSignature, solveIsStale, visibleHouses } from './edit';
 import { renderHouseDots } from './ui/houseEdit';
 
 export interface AppView {
@@ -124,7 +124,7 @@ export function initApp(ctx: {
     const s = store.state;
     const houses = visible;
     const a = prepareAssignments();
-    const start = { state: store.state as object, groups: s.config.groups, modelKey, osm: modelOsm };
+    const start = { state: store.state as object, groups: s.config.groups, modelKey, osm: modelOsm, inputs: inputSignature(s) };
     // solve() reseeds when any group is empty but would still apply locks, so only
     // treat the current assignment as usable when every group has at least one house.
     const complete = a.every((g) => g >= 0 && g < s.config.groups) && new Set(a).size === s.config.groups;
@@ -149,8 +149,8 @@ export function initApp(ctx: {
     status(note + 'Solving…');
     try {
       const sol = await runSolve(problem, (iter) => status(`${note}Solving… ${iter}/${iterations}`));
-      if (solveIsStale(start, { state: store.state, groups: store.state.config.groups, modelKey, osm: modelOsm })) {
-        status('Result discarded: the project, group count or house set changed while solving. Solve again.');
+      if (solveIsStale(start, { state: store.state, groups: store.state.config.groups, modelKey, osm: modelOsm, inputs: inputSignature(store.state) })) {
+        status('Result discarded: the project, group count, house set, assignment, locks or removals changed while solving. Solve again.');
         return;
       }
       tourCache.seed(sol.assign, s.config.groups, sol.tours);

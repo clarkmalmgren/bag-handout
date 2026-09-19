@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { adoptNearest, solveIsStale, mergeFetched, visibleHouses, confirmFetchReplaces } from '../src/edit';
+import { adoptNearest, solveIsStale, mergeFetched, inputSignature, visibleHouses, confirmFetchReplaces } from '../src/edit';
 import type { House } from '../src/types';
 
 const h = (id: string, manual: boolean): House => ({ id, lat: 0, lon: 0, label: id, street: '', flagged: false, manual });
@@ -38,13 +38,24 @@ describe('adoptNearest', () => {
 
 describe('solveIsStale', () => {
   const s = {};
-  const base = { state: s, groups: 4, modelKey: 'k', osm: null };
-  it('is fresh when nothing changed', () => expect(solveIsStale(base, { ...base })).toBe(false));
+  const inputs = { assignment: { a: 0, b: 1 } as Record<string, number>, locked: ['Row 0:1-2'], removed: ['x'] };
+  const ctx = (i = inputs) => ({ state: s, groups: 4, modelKey: 'k', osm: null, inputs: inputSignature(i) });
+  const base = ctx();
+  it('is fresh when nothing changed', () => expect(solveIsStale(base, ctx({ ...inputs, assignment: { ...inputs.assignment } }))).toBe(false));
   it('detects group count, model key, osm and project change', () => {
     expect(solveIsStale(base, { ...base, groups: 5 })).toBe(true);
     expect(solveIsStale(base, { ...base, modelKey: 'k2' })).toBe(true);
     expect(solveIsStale(base, { ...base, osm: {} })).toBe(true);
     expect(solveIsStale(base, { ...base, state: {} })).toBe(true);
+  });
+  it('detects an assignment change', () => {
+    expect(solveIsStale(base, ctx({ ...inputs, assignment: { a: 1, b: 1 } }))).toBe(true);
+  });
+  it('detects a lock change', () => {
+    expect(solveIsStale(base, ctx({ ...inputs, locked: [] }))).toBe(true);
+  });
+  it('detects a removed change', () => {
+    expect(solveIsStale(base, ctx({ ...inputs, removed: ['x', 'y'] }))).toBe(true);
   });
 });
 
