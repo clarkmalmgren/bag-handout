@@ -62,7 +62,7 @@ export function cacheKey(polygon: Polygon): string {
   return `overpass:${CACHE_VERSION}:${hashPolygon(polygon)}`;
 }
 
-async function idbCache(): Promise<Cache> {
+export async function idbCache(): Promise<Cache> {
   const { get, set } = await import('idb-keyval');
   return { get: (k) => get(k), set: (k, v) => set(k, v) };
 }
