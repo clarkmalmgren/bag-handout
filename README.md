@@ -56,3 +56,17 @@ Advanced tuning (`crossingPenalty`, `weights`, `iterations`, `seed`, `secPerHous
 ## Real-area acceptance runbook
 
 See [docs/acceptance-runbook.md](docs/acceptance-runbook.md). **This runbook has NOT been executed**: it needs live Overpass access and a person judging the results against satellite imagery. The automated smoke test covers only the synthetic 120-house grid.
+
+## Hosting
+
+Live site: https://clarkmalmgren.github.io/bag-handout/
+
+Pushing to `main` runs `.github/workflows/pages.yml`, which tests, builds and deploys `dist/` to GitHub Pages. In the repository, Settings > Pages > Source must be set to "GitHub Actions". To build for a sub-path locally, run `VITE_BASE=/bag-handout/ npm run build` (the default base is `/`).
+
+## Data and tile attribution
+
+Houses and roads come from OpenStreetMap contributors via the Overpass API (ODbL). Satellite tiles are Esri World Imagery and street tiles are OpenStreetMap's tile servers; both services have their own usage terms. This app is intended for light, occasional use by a small group. Anyone running it at scale should use their own tile provider and key.
+
+## License
+
+MIT; see [LICENSE.md](LICENSE.md).
