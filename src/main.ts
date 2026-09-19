@@ -5,7 +5,7 @@ import { fetchOverpass } from './data/overpass';
 import { HouseEditor } from './ui/houseEdit';
 import { initApp } from './app';
 import { wireExports } from './export/wire';
-import { mergeFetched } from './edit';
+import { mergeFetched, visibleHouses, confirmFetchReplaces } from './edit';
 import './style.css';
 
 const store = new Store(emptyState());
@@ -27,16 +27,7 @@ const { map, drawn } = createMap(mapEl, (poly) => {
   setStatus('Boundary set. Fetch houses next.');
 });
 
-const houseEditor = new HouseEditor(map, store, () => setStatus(`Loaded: ${visibleHouses().length} houses`));
-
-function status(text: string): void {
-  setStatus(text);
-}
-
-function visibleHouses() {
-  const removed = new Set(store.state.removed);
-  return store.state.houses.filter((h) => !removed.has(h.id));
-}
+const houseEditor = new HouseEditor(map, store, () => setStatus(`Loaded: ${visibleHouses(store.state).length} houses`));
 
 const app = initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding });
 wireExports(app, store);
@@ -72,7 +63,7 @@ document.getElementById('load-input')!.addEventListener('change', async (ev) => 
     if (!store.state.boundary && store.state.houses.length > 0) {
       map.fitBounds(store.state.houses.map((h) => [h.lat, h.lon] as [number, number]));
     }
-    setStatus(`Loaded: ${store.state.houses.length} houses`);
+    setStatus(`Loaded: ${visibleHouses(store.state).length} houses`);
   } catch (err) {
     setStatus(`Could not load project: ${(err as Error).message}`);
   } finally {
@@ -85,25 +76,32 @@ document.getElementById('add-house')!.addEventListener('click', (e) => {
   (e.currentTarget as HTMLElement).classList.toggle('active', on);
 });
 
-document.getElementById('fetch')!.addEventListener('click', async () => {
+async function fetchHouses(force: boolean): Promise<void> {
   const boundary = store.state.boundary;
   if (!boundary) {
-    status('Draw a boundary first');
+    setStatus('Draw a boundary first');
     return;
   }
-  status('Fetching from OpenStreetMap…');
+  if (!confirmFetchReplaces(store.state.assignment)) {
+    setStatus('Fetch cancelled.');
+    return;
+  }
+  setStatus(force ? 'Re-fetching from OpenStreetMap (ignoring cache)…' : 'Fetching from OpenStreetMap…');
   try {
-    const r = await fetchOverpass(boundary);
+    const r = await fetchOverpass(boundary, { force });
     store.update((s) => {
       s.osm = r.osm;
       const merged = mergeFetched(r.houses, s.houses, s.removed);
       s.houses = merged.houses;
       s.removed = merged.removed;
-      s.assignment = {};
+      s.assignment = {}; // Undo restores this
     });
     const flagged = r.houses.filter((h) => h.flagged).length;
-    status(`Loaded: ${visibleHouses().length} houses (${flagged} without an address, shown in orange)`);
+    setStatus(`Loaded: ${visibleHouses(store.state).length} houses (${flagged} without an address, shown in orange)`);
   } catch (e) {
-    status(`Fetch failed: ${(e as Error).message}`);
+    setStatus(`Fetch failed: ${(e as Error).message}`);
   }
-});
+}
+
+document.getElementById('fetch')!.addEventListener('click', () => void fetchHouses(false));
+document.getElementById('refetch')!.addEventListener('click', () => void fetchHouses(true));

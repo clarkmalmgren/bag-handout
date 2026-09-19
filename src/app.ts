@@ -7,7 +7,7 @@ import { runSolve } from './ui/solveClient';
 import { groupStats } from './stats';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
 import { colorOf, renderPanel } from './ui/groups';
-import { adoptNearest, solveIsStale } from './edit';
+import { adoptNearest, solveIsStale, visibleHouses } from './edit';
 import { renderHouseDots } from './ui/houseEdit';
 
 export interface AppView {
@@ -38,11 +38,6 @@ export function initApp(ctx: {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const status = (t: string) => { $('status').textContent = t; };
 
-  function visibleHouses(): House[] {
-    const removed = new Set(store.state.removed);
-    return store.state.houses.filter((h) => !removed.has(h.id));
-  }
-
   function assignIdx(): number[] {
     return visible.map((h) => store.state.assignment[h.id] ?? -1);
   }
@@ -55,7 +50,7 @@ export function initApp(ctx: {
   function ensureModel(): void {
     const s = store.state;
     const key = modelKeyOf();
-    visible = visibleHouses();
+    visible = visibleHouses(s);
     if (key === modelKey && s.osm === modelOsm) return;
     modelKey = key;
     modelOsm = s.osm;

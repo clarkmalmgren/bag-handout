@@ -38,9 +38,23 @@ export function solveIsStale(start: SolveContext, now: SolveContext): boolean {
   return start.state !== now.state || start.groups !== now.groups || start.modelKey !== now.modelKey || start.osm !== now.osm;
 }
 
-/** Result of a re-fetch: fresh houses plus the manual ones, keeping removals of manual houses. */
+/**
+ * Result of a re-fetch: fresh houses plus the manual ones. ALL previously removed ids are kept (they are harmless
+ * when the house is absent from the new fetch) so hand-pruned OSM houses such as garages do not come back.
+ */
 export function mergeFetched(fetched: House[], oldHouses: House[], oldRemoved: string[]): { houses: House[]; removed: string[] } {
   const manual = oldHouses.filter((h) => h.manual);
-  const manualIds = new Set(manual.map((h) => h.id));
-  return { houses: [...fetched, ...manual], removed: oldRemoved.filter((id) => manualIds.has(id)) };
+  return { houses: [...fetched, ...manual], removed: [...oldRemoved] };
+}
+
+/** Houses that are not in the removed list. */
+export function visibleHouses(s: { houses: House[]; removed: string[] }): House[] {
+  const removed = new Set(s.removed);
+  return s.houses.filter((h) => !removed.has(h.id));
+}
+
+/** Fetching wipes the assignment (Undo restores it), so ask first when there is one. */
+export function confirmFetchReplaces(assignment: Record<string, number>, confirmFn: (m: string) => boolean = (m) => window.confirm(m)): boolean {
+  if (Object.keys(assignment).length === 0) return true;
+  return confirmFn('Fetching replaces all group assignments. Undo can restore them. Continue?');
 }
