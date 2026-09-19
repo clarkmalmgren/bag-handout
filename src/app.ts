@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import type { Store } from './state';
 import type { House, Tour } from './types';
-import { buildModel, type Model } from './model';
+import { buildModel, canSolve, type Model } from './model';
 import { routeGroups, type SolveProblem } from './solver/solve';
 import { runSolve } from './ui/solveClient';
 import { groupStats } from './stats';
@@ -90,6 +90,7 @@ export function initApp(ctx: {
   function draw(a: number[]): void {
     const s = store.state;
     const tol = s.config.weights.tolerance;
+    ($('remove-disc') as HTMLButtonElement).hidden = true;
     if (!model) {
       overlays.clear();
       renderHouseDots(plainDots, visible, removeHouse);
@@ -98,7 +99,7 @@ export function initApp(ctx: {
     }
     plainDots.clearLayers();
     const handlers: OverlayHandlers = { onRemoveHouse: removeHouse, onSegment: openSegmentMenu };
-    overlays.render(model, a, tours, new Set(s.locked), handlers);
+    overlays.render(model, a, tours, new Set(s.locked), handlers, new Set(model.disconnected));
 
     const groups = s.config.groups;
     const sizes: number[] = Array(groups).fill(0);
@@ -108,8 +109,11 @@ export function initApp(ctx: {
 
     const warnings: string[] = [];
     if (model.disconnected.length > 0) {
-      warnings.push(`${model.disconnected.length} houses are not connected to the main street network (creek/pond gap?).`);
+      warnings.push(`${model.disconnected.length} houses are not connected to the main street network (red rings on the map). Solve is blocked until they are removed.`);
     }
+    const rd = $('remove-disc') as HTMLButtonElement;
+    rd.hidden = model.disconnected.length === 0;
+    rd.textContent = `Remove ${model.disconnected.length} disconnected house${model.disconnected.length === 1 ? '' : 's'}`;
     const flagged = visible.filter((h) => h.flagged).length;
     if (flagged > 0) warnings.push(`${flagged} buildings have no address — review them on the map.`);
     renderPanel($('panel'), stats, visible.length / groups, tol, warnings);
@@ -117,7 +121,8 @@ export function initApp(ctx: {
 
   async function solveNow(fresh: boolean): Promise<void> {
     const m = model;
-    if (!m) { status('Load or fetch houses first'); return; }
+    const gate = canSolve(m);
+    if (!m || !gate.ok) { status(gate.message); return; }
     const s = store.state;
     const houses = visible;
     const a = prepareAssignments();
@@ -162,6 +167,15 @@ export function initApp(ctx: {
     }
   }
 
+  $('remove-disc').addEventListener('click', () => {
+    const m = model;
+    if (!m || m.disconnected.length === 0) return;
+    const ids = m.disconnected.map((i) => m.houses[i].id);
+    store.update((st) => {
+      for (const id of ids) if (!st.removed.includes(id)) st.removed.push(id);
+    });
+    status(`Removed ${ids.length} disconnected house${ids.length === 1 ? '' : 's'} (Undo restores them).`);
+  });
   $('solve').addEventListener('click', () => void solveNow(true));
   $('reopt').addEventListener('click', () => void solveNow(false));
   $('groups').addEventListener('change', (ev) => {

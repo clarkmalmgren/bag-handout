@@ -41,3 +41,20 @@ export function buildModel(houses: House[], osm: OsmData, crossingPenalty: numbe
 
   return { houses, graph, snaps, dist, segmentOf: snaps.map((s) => s.segment), xy, disconnected };
 }
+
+/**
+ * Solving is blocked while any house is snapped to a road component that is cut off from the main
+ * network: its ~1e6 m "unreachable" distance would swamp the objective. Pure helper so it is testable.
+ */
+export function canSolve(model: Model | null): { ok: boolean; message: string } {
+  if (!model) return { ok: false, message: 'Load or fetch houses first' };
+  const n = model.disconnected.length;
+  if (n > 0) {
+    return {
+      ok: false,
+      message: `${n} house${n === 1 ? ' is' : 's are'} not connected to the main street network (shown with a red ring). ` +
+        `Solving is blocked: remove them (button "Remove ${n} disconnected house${n === 1 ? '' : 's'}") or fix the boundary so the connecting road is inside it.`,
+    };
+  }
+  return { ok: true, message: '' };
+}

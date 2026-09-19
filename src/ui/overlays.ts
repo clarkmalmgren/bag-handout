@@ -26,7 +26,7 @@ export class Overlays {
     this.dots.clearLayers();
   }
 
-  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers): void {
+  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers, disconnected: Set<number> = new Set()): void {
     this.clear();
 
     // Majority group per street segment.
@@ -83,6 +83,10 @@ export class Overlays {
         dot.bindTooltip(house.label);
       }
       dot.addTo(this.dots);
+      if (disconnected.has(i)) {
+        // Red ring: cut off from the main street network. Non-interactive so the dot above stays clickable.
+        L.circleMarker([house.lat, house.lon], { radius: 10, color: '#dc2626', weight: 3, fill: false, interactive: false }).addTo(this.dots);
+      }
     });
 
     tours.forEach((t, g) => {

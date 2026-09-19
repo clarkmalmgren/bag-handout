@@ -2,6 +2,7 @@ import type { Dist, Tour, Weights, XY } from '../types';
 import { mulberry32 } from '../rng';
 import { seedPartition } from './seed';
 import { anneal, type Solution } from './anneal';
+import { UNREACHABLE } from '../graph/shortest';
 import { solveTour, rotateToStart } from './tsp';
 
 export type { Solution } from './anneal';
@@ -27,6 +28,17 @@ export function matrixDist(m: Float32Array, n: number): Dist {
 }
 
 export function solve(p: SolveProblem, onProgress?: (iter: number, best: number) => void): Solution {
+  // Defence in depth: an unreachable pair (capped at UNREACHABLE) would swamp the objective and leave the
+  // other groups un-optimised. The UI blocks this earlier; refuse here too.
+  const m = p.distMatrix;
+  for (let i = 0; i < m.length; i++) {
+    if (!(m[i] < UNREACHABLE)) {
+      throw new Error(
+        'Some houses are not connected to the rest of the street network (unreachable distance in the matrix). ' +
+          'Remove those houses or extend the boundary so the connecting road is included.',
+      );
+    }
+  }
   const dist = matrixDist(p.distMatrix, p.houseCount);
   const rng = mulberry32(p.seed);
   const valid =
