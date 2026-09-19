@@ -4,6 +4,7 @@ import { Store, emptyState } from './state';
 import { fetchOverpass } from './data/overpass';
 import { HouseEditor } from './ui/houseEdit';
 import { initApp } from './app';
+import { mergeFetched } from './edit';
 import './style.css';
 
 const store = new Store(emptyState());
@@ -25,7 +26,7 @@ const { map, drawn } = createMap(mapEl, (poly) => {
   setStatus('Boundary set. Fetch houses next.');
 });
 
-const houseEditor = new HouseEditor(map, store);
+const houseEditor = new HouseEditor(map, store, () => setStatus(`Loaded: ${visibleHouses().length} houses`));
 
 function status(text: string): void {
   setStatus(text);
@@ -36,7 +37,7 @@ function visibleHouses() {
   return store.state.houses.filter((h) => !removed.has(h.id));
 }
 
-initApp({ store, map, removeHouse: (id) => houseEditor.remove(id) });
+initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding });
 
 map.on('bagboundarycleared', () => {
   store.update(
@@ -93,8 +94,9 @@ document.getElementById('fetch')!.addEventListener('click', async () => {
     const r = await fetchOverpass(boundary);
     store.update((s) => {
       s.osm = r.osm;
-      s.houses = [...r.houses, ...s.houses.filter((h) => h.manual)];
-      s.removed = [];
+      const merged = mergeFetched(r.houses, s.houses, s.removed);
+      s.houses = merged.houses;
+      s.removed = merged.removed;
       s.assignment = {};
     });
     const flagged = r.houses.filter((h) => h.flagged).length;

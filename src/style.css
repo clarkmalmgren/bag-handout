@@ -3,3 +3,6 @@
 .chip { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .delta.bad { background: #c62828; color: #fff; border-radius: 8px; padding: 0 6px; text-align: center; }
 .warn { background: #fff4e5; border-left: 3px solid #f58231; padding: 4px 6px; margin-bottom: 6px; }
+
+.seg-menu { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
+.seg-menu button { text-align: left; cursor: pointer; }

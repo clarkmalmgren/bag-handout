@@ -6,7 +6,8 @@ import { routeGroups, type SolveProblem } from './solver/solve';
 import { runSolve } from './ui/solveClient';
 import { groupStats } from './stats';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
-import { renderPanel } from './ui/groups';
+import { colorOf, renderPanel } from './ui/groups';
+import { adoptNearest, solveIsStale } from './edit';
 import { renderHouseDots } from './ui/houseEdit';
 
 export interface AppView {
@@ -21,8 +22,11 @@ export function initApp(ctx: {
   map: L.Map;
   /** removes a house by id (HouseEditor.remove) */
   removeHouse: (id: string) => void;
+  /** true while the add-house tool is active (street clicks then belong to the map) */
+  isAdding?: () => boolean;
 }): { getView(): AppView } {
   const { store, map, removeHouse } = ctx;
+  const isAdding = ctx.isAdding ?? (() => false);
   const overlays = new Overlays(map);
   const plainDots = L.layerGroup().addTo(map); // houses before a road model exists
   let model: Model | null = null;
@@ -58,11 +62,23 @@ export function initApp(ctx: {
     model = s.osm && visible.length > 0 ? buildModel(visible, s.osm, s.config.crossingPenalty) : null;
   }
 
+  /** Assignment as indices; houses with none (added by hand, restored by undo) adopt their nearest assigned neighbour. */
+  function prepareAssignments(): number[] {
+    const s = store.state;
+    const a = assignIdx();
+    if (!model) return a;
+    for (const i of adoptNearest(a, model.dist, s.config.groups)) {
+      // Derived default, not a user action: write straight into state so it is not an undo step and does not re-emit.
+      s.assignment[visible[i].id] = a[i];
+    }
+    return a;
+  }
+
   function refresh(): void {
     const s = store.state;
     ensureModel();
     ($('groups') as HTMLInputElement).value = String(s.config.groups);
-    const a = assignIdx();
+    const a = prepareAssignments();
     const groups = s.config.groups;
     // Tours are always recomputed here (main thread) so the display is identical after a solve and after a manual edit.
     tours = model && a.length > 0 && a.every((g) => g >= 0 && g < groups)
@@ -81,7 +97,7 @@ export function initApp(ctx: {
       return;
     }
     plainDots.clearLayers();
-    const handlers: OverlayHandlers = { onRemoveHouse: removeHouse };
+    const handlers: OverlayHandlers = { onRemoveHouse: removeHouse, onSegment: openSegmentMenu };
     overlays.render(model, a, tours, new Set(s.locked), handlers);
 
     const groups = s.config.groups;
@@ -104,7 +120,8 @@ export function initApp(ctx: {
     if (!m) { status('Load or fetch houses first'); return; }
     const s = store.state;
     const houses = visible;
-    const a = assignIdx();
+    const a = prepareAssignments();
+    const start = { state: store.state as object, groups: s.config.groups, modelKey, osm: modelOsm };
     // solve() reseeds when any group is empty but would still apply locks, so only
     // treat the current assignment as usable when every group has at least one house.
     const complete = a.every((g) => g >= 0 && g < s.config.groups) && new Set(a).size === s.config.groups;
@@ -129,6 +146,10 @@ export function initApp(ctx: {
     status(note + 'Solving…');
     try {
       const sol = await runSolve(problem, (iter) => status(`${note}Solving… ${iter}/${iterations}`));
+      if (solveIsStale(start, { state: store.state, groups: store.state.config.groups, modelKey, osm: modelOsm })) {
+        status('Result discarded: the project, group count or house set changed while solving. Solve again.');
+        return;
+      }
       store.update((st) => {
         houses.forEach((h, i) => { st.assignment[h.id] = sol.assign[i]; });
       });
@@ -143,11 +164,70 @@ export function initApp(ctx: {
 
   $('solve').addEventListener('click', () => void solveNow(true));
   $('reopt').addEventListener('click', () => void solveNow(false));
-  $('undo').addEventListener('click', () => store.undo());
-  $('redo').addEventListener('click', () => store.redo());
   $('groups').addEventListener('change', (ev) => {
     const n = Math.max(2, Math.min(12, Number((ev.target as HTMLInputElement).value) || 6));
     store.update((st) => { st.config.groups = n; }, { undoable: false });
+  });
+
+  function reassignSegment(segmentId: number, group: number): void {
+    const m = model;
+    if (!m) return;
+    const houses = visible;
+    store.update((st) => {
+      m.snaps.forEach((sn, i) => {
+        if (sn.segment === segmentId) st.assignment[houses[i].id] = group;
+      });
+    });
+    const sizes: number[] = Array(store.state.config.groups).fill(0);
+    assignIdx().forEach((g) => { if (g >= 0 && g < sizes.length) sizes[g]++; });
+    const mean = houses.length / sizes.length;
+    const off = sizes.findIndex((n) => Math.abs(n - mean) > store.state.config.weights.tolerance);
+    status(off >= 0 ? `Group ${off + 1} is now ${sizes[off]} houses (mean ${mean.toFixed(1)}) — allowed, but unbalanced` : 'Moved');
+  }
+
+  function toggleLock(segmentId: number): void {
+    const m = model;
+    if (!m) return;
+    const key = m.graph.segments[segmentId].key;
+    store.update((st) => {
+      const i = st.locked.indexOf(key);
+      if (i >= 0) st.locked.splice(i, 1);
+      else st.locked.push(key);
+    });
+  }
+
+  function openSegmentMenu(segmentId: number, at: L.LatLng): void {
+    const m = model;
+    if (!m || isAdding()) return;
+    const seg = m.graph.segments[segmentId];
+    const count = m.snaps.filter((sn) => sn.segment === segmentId).length;
+    const box = document.createElement('div');
+    box.className = 'seg-menu';
+    const title = document.createElement('strong');
+    title.textContent = `${seg.street || '(unnamed)'} — ${count} houses`;
+    box.append(title);
+    for (let g = 0; g < store.state.config.groups; g++) {
+      const b = document.createElement('button');
+      b.textContent = `Group ${g + 1}`;
+      b.style.borderLeft = `10px solid ${colorOf(g)}`;
+      b.addEventListener('click', () => { map.closePopup(); reassignSegment(segmentId, g); });
+      box.append(b);
+    }
+    const lock = document.createElement('button');
+    lock.textContent = store.state.locked.includes(seg.key) ? 'Unlock (let optimizer move it)' : 'Lock (optimizer keeps it here)';
+    lock.addEventListener('click', () => { map.closePopup(); toggleLock(segmentId); });
+    box.append(lock);
+    L.popup().setLatLng(at).setContent(box).openOn(map);
+  }
+
+  $('undo').addEventListener('click', () => { if (!store.undo()) status('Nothing to undo'); });
+  $('redo').addEventListener('click', () => { if (!store.redo()) status('Nothing to redo'); });
+  window.addEventListener('keydown', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== 'z') return;
+    if ((ev.target as HTMLElement).closest('input, textarea')) return;
+    ev.preventDefault();
+    if (ev.shiftKey) store.redo();
+    else store.undo();
   });
 
   store.subscribe(refresh);

@@ -5,10 +5,20 @@ import type { House } from '../types';
 export class HouseEditor {
   private adding = false;
 
-  constructor(private map: L.Map, private store: Store) {
+  private drawing = false;
+
+  constructor(private map: L.Map, private store: Store, private onChange: () => void = () => {}) {
+    // Boundary drawing/editing also produces map clicks; those must never add houses.
+    const on = (evs: string[], v: boolean) => evs.forEach((ev) => map.on(ev, () => { this.drawing = v; }));
+    on(['draw:drawstart', 'draw:editstart', 'draw:deletestart'], true);
+    on(['draw:drawstop', 'draw:editstop', 'draw:deletestop'], false);
     map.on('click', (e: L.LeafletMouseEvent) => {
-      if (this.adding) this.add(e.latlng);
+      if (this.adding && !this.drawing) this.add(e.latlng);
     });
+  }
+
+  get isAdding(): boolean {
+    return this.adding;
   }
 
   setAdding(on: boolean): void {
@@ -36,12 +46,14 @@ export class HouseEditor {
     this.store.update((s) => {
       s.houses.push(house);
     });
+    this.onChange();
   }
 
   remove(id: string): void {
     this.store.update((s) => {
       if (!s.removed.includes(id)) s.removed.push(id);
     });
+    this.onChange();
   }
 }
 
@@ -56,6 +68,7 @@ export function renderHouseDots(layer: L.LayerGroup, houses: House[], onRemove: 
       color: '#222',
       fillColor: h.flagged ? '#f59e0b' : '#38bdf8',
       fillOpacity: 0.9,
+      bubblingMouseEvents: false,
     });
     const box = document.createElement('div');
     box.append(document.createTextNode(h.label));

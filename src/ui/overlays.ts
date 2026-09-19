@@ -63,11 +63,12 @@ export class Overlays {
     m.houses.forEach((house, i) => {
       const dot = L.circleMarker([house.lat, house.lon], {
         radius: 4,
-        color: '#ffffff',
-        weight: 1,
+        color: house.flagged ? '#f59e0b' : '#ffffff', // orange outline = no address, review it
+        weight: house.flagged ? 3 : 1,
         fillColor: colorOf(assign[i]),
         fillOpacity: 1,
         interactive: true,
+        bubblingMouseEvents: false,
       });
       if (h.onRemoveHouse) {
         const box = document.createElement('div');
