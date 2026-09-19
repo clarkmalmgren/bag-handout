@@ -4,6 +4,7 @@ import { Store, emptyState } from './state';
 import { fetchOverpass } from './data/overpass';
 import { HouseEditor } from './ui/houseEdit';
 import { initApp } from './app';
+import { wireExports } from './export/wire';
 import { mergeFetched } from './edit';
 import './style.css';
 
@@ -37,7 +38,8 @@ function visibleHouses() {
   return store.state.houses.filter((h) => !removed.has(h.id));
 }
 
-initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding });
+const app = initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding });
+wireExports(app, store);
 
 map.on('bagboundarycleared', () => {
   store.update(
