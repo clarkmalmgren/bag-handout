@@ -29,7 +29,7 @@ const { map, drawn } = createMap(mapEl, (poly) => {
 
 const houseEditor = new HouseEditor(map, store, () => setStatus(`Loaded: ${visibleHouses(store.state).length} houses`));
 
-const app = initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding });
+const app = initApp({ store, map, removeHouse: (id) => houseEditor.remove(id), isAdding: () => houseEditor.isAdding, isDrawing: () => houseEditor.isDrawing });
 wireExports(app, store);
 
 map.on('bagboundarycleared', () => {

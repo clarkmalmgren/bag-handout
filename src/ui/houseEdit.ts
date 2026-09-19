@@ -21,6 +21,11 @@ export class HouseEditor {
     return this.adding;
   }
 
+  /** true while a boundary is being drawn, edited or deleted */
+  get isDrawing(): boolean {
+    return this.drawing;
+  }
+
   setAdding(on: boolean): void {
     this.adding = on;
     this.map.getContainer().style.cursor = on ? 'crosshair' : '';

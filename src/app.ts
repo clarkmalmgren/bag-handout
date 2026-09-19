@@ -25,9 +25,12 @@ export function initApp(ctx: {
   removeHouse: (id: string) => void;
   /** true while the add-house tool is active (street clicks then belong to the map) */
   isAdding?: () => boolean;
+  /** true while the boundary is being drawn/edited (street clicks then belong to the draw tool) */
+  isDrawing?: () => boolean;
 }): { getView(): AppView } {
   const { store, map, removeHouse } = ctx;
   const isAdding = ctx.isAdding ?? (() => false);
+  const isDrawing = ctx.isDrawing ?? (() => false);
   const overlays = new Overlays(map);
   const plainDots = L.layerGroup().addTo(map); // houses before a road model exists
   let model: Model | null = null;
@@ -211,7 +214,7 @@ export function initApp(ctx: {
 
   function openSegmentMenu(segmentId: number, at: L.LatLng): void {
     const m = model;
-    if (!m || isAdding()) return;
+    if (!m || isAdding() || isDrawing()) return;
     const seg = m.graph.segments[segmentId];
     const count = m.snaps.filter((sn) => sn.segment === segmentId).length;
     const box = document.createElement('div');
