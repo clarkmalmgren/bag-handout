@@ -57,6 +57,8 @@ describe('solve pipeline on the synthetic grid', () => {
     expect(a.score).toBeCloseTo(b.score, 9);
   });
 
+  // Holds by construction (best starts as the feasible seed), so it guards against regressions only;
+  // the multi-seed test below checks real improvement.
   it('never scores worse than the seed partition', () => {
     const seedOnly = solve(problem(0));
     const annealed = solve(problem(400));
@@ -65,9 +67,16 @@ describe('solve pipeline on the synthetic grid', () => {
 
   it('never moves locked houses', () => {
     const start = solve(problem(0)).assign;
-    const locked = houses.map((_, i) => i < 10);
-    const sol = solve(problem(400, { initial: start, locked }));
-    for (let i = 0; i < 10; i++) expect(sol.assign[i]).toBe(start[i]);
+    const free = solve(problem(3000, { initial: start })).assign;
+    const movers = start.map((g, i) => (free[i] !== g ? i : -1)).filter((i) => i >= 0);
+    // Without locks the optimizer really does move houses, so the lock assertion below can fail.
+    expect(movers.length).toBeGreaterThanOrEqual(4);
+    const lockedIdx = new Set<number>([...movers.slice(0, Math.ceil(movers.length / 2)), 0, 1, 2]);
+    const locked = houses.map((_, i) => lockedIdx.has(i));
+    const sol = solve(problem(3000, { initial: start, locked }));
+    for (const i of lockedIdx) expect(sol.assign[i]).toBe(start[i]);
+    // and the run is not a no-op: some unlocked house did move.
+    expect(sol.assign.some((g, i) => !locked[i] && g !== start[i])).toBe(true);
   });
 
   it('reseeds when the initial assignment is invalid', () => {
@@ -111,9 +120,31 @@ describe('anneal invariants', () => {
     sizesOf(sol.assign).forEach((s) => expect(s).toBeGreaterThan(0));
   });
 
-  it('actually improves on the seed partition', () => {
-    const seedOnly = solve(problem(0));
-    const annealed = solve(problem(3000));
-    expect(annealed.score).toBeLessThan(seedOnly.score);
+  it('improves on the seed partition by a real margin across seeds', () => {
+    const seeds = [1, 2, 3, 4, 5];
+    let base = 0;
+    let after = 0;
+    for (const seed of seeds) {
+      const s0 = solve(problem(0, { seed })).score;
+      const s3 = solve(problem(3000, { seed })).score;
+      expect(s3).toBeLessThanOrEqual(s0 + 1e-6);
+      base += s0;
+      after += s3;
+    }
+    // Measured: about 6.9% mean improvement at 3000 iterations.
+    expect(after).toBeLessThan(base * 0.96);
+  });
+
+  it('more iterations does not systematically worsen the result', () => {
+    const seeds = [1, 2, 3, 4, 5];
+    let s3 = 0;
+    let s8 = 0;
+    for (const seed of seeds) {
+      s3 += solve(problem(3000, { seed })).score;
+      s8 += solve(problem(8000, { seed })).score;
+    }
+    // Measured mean: ~2332 at 3000 vs ~2288 at 8000. Individual seeds are noisy (the schedules are
+    // not nested), so only the mean is asserted.
+    expect(s8).toBeLessThanOrEqual(s3 + 1e-6);
   });
 });

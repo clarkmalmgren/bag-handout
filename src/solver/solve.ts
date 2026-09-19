@@ -32,7 +32,8 @@ export function solve(p: SolveProblem, onProgress?: (iter: number, best: number)
   const valid =
     p.initial !== undefined &&
     p.initial.length === p.houseCount &&
-    p.initial.every((g) => Number.isInteger(g) && g >= 0 && g < p.groups);
+    p.initial.every((g) => Number.isInteger(g) && g >= 0 && g < p.groups) &&
+    new Set(p.initial).size === p.groups; // an empty group can never be refilled, so reseed
   const initial = valid ? p.initial! : seedPartition(p.xy, p.groups, rng, p.weights.tolerance);
   return anneal({
     dist,
