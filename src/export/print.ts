@@ -5,15 +5,12 @@ import type { Config } from '../types';
 import { groupStats } from '../stats';
 import { colorOf } from '../ui/groups';
 import { addressOf } from './csv';
+import { disposeAll } from './dispose';
 import { fitBox, type LatLngPair } from './bounds';
 
 const liveMaps = new Set<L.Map>();
-/** number of print maps currently alive (for tests / leak checks) */
-export const liveMapCount = (): number => liveMaps.size;
-
 function disposeMaps(): void {
-  liveMaps.forEach((m) => m.remove());
-  liveMaps.clear();
+  disposeAll(liveMaps);
 }
 
 const SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
