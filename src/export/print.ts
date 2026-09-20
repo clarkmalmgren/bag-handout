@@ -4,7 +4,6 @@ import type { AppView } from '../app';
 import type { Config } from '../types';
 import { groupStats } from '../stats';
 import { colorOf } from '../ui/groups';
-import { addressOf } from './csv';
 import { disposeAll } from './dispose';
 import { fitBox, type LatLngPair } from './bounds';
 import { tourPolyline } from '../graph/route';
@@ -29,7 +28,7 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 function mountMap(div: HTMLElement, points: LatLngPair[]): { map: L.Map; ready: Promise<void> } {
   const map = L.map(div, { zoomControl: false, attributionControl: false, preferCanvas: true, zoomSnap: 0.25, maxZoom: 19 });
   liveMaps.add(map);
-  map.fitBounds(fitBox(points), { maxZoom: 18, padding: [24, 24] });
+  map.fitBounds(fitBox(points), { maxZoom: 18, padding: [16, 16] });
   const tiles = L.tileLayer(SAT, { maxZoom: 19, crossOrigin: true });
   const ready = new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, 8000);
@@ -102,30 +101,27 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
     const page = h('section', 'print-page');
     const s = stats[g];
     page.append(h('h2', undefined, `Group ${g + 1} — ${s.houses} houses`));
-    page.append(h('p', undefined, `Loop ${fmtDist(s.length)}, about ${Math.round(s.minutes)} min. Start at stop 1 and follow the numbers.`));
+    page.append(h('p', undefined, `Loop ${fmtDist(s.length)}, about ${Math.round(s.minutes)} min. Start at stop 1 (outlined) and follow the numbers.`));
     if (t.order.length === 0) {
       page.append(h('p', undefined, 'No houses assigned.'));
       root.append(page);
       continue;
     }
-    const mapDiv = h('div', 'print-map');
+    const mapDiv = h('div', 'print-map group-map');
     page.append(mapDiv);
-    const list = h('ol', 'stops');
-    t.order.forEach((idx) => list.append(h('li', undefined, addressOf(houses[idx], model, idx))));
-    page.append(list);
     root.append(page);
 
     const route = tourPolyline(model, t.order).map((p) => [p.lat, p.lon] as LatLngPair);
     const gm = mountMap(mapDiv, route);
     ready.push(gm.ready);
-    L.polyline(route, { color: colorOf(g), weight: 3, dashArray: '6 6' }).addTo(gm.map);
+    L.polyline(route, { color: colorOf(g), weight: 3, opacity: 0.95, dashArray: '6 6' }).addTo(gm.map);
     t.order.forEach((idx, k) => {
       const icon = L.divIcon({
         className: 'stop-icon',
         html: `<div class="stop${k === 0 ? ' start' : ''}" style="background:${colorOf(g)}">${k + 1}</div>`,
-        iconSize: [20, 20],
+        iconSize: [22, 22],
       });
-      L.marker(latlng(idx), { icon, interactive: false }).addTo(gm.map);
+      L.marker(latlng(idx), { icon, interactive: false, zIndexOffset: k === 0 ? 1000 : 0 }).addTo(gm.map);
     });
   }
 

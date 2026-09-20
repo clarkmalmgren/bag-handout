@@ -12,17 +12,21 @@
 #print-root { position: fixed; inset: 0; background: #fff; color: #000; overflow: auto; z-index: 10000; padding: 16px; }
 #print-root[hidden] { display: none; }
 .print-bar { position: sticky; top: 0; background: #fff; padding: 8px 0; display: flex; gap: 8px; z-index: 1; }
-.print-page { max-width: 8in; margin: 0 auto 24px; padding: 0.3in; border: 1px solid #ccc; background: #fff; }
+.print-page { max-width: 8.5in; margin: 0 auto 24px; box-sizing: border-box; padding: 0.3in; border: 1px solid #ccc; background: #fff; }
 .print-map { height: 4.6in; width: 100%; }
+.print-map.group-map { height: 8.9in; }
+.print-page h2 { margin: 0 0 4px; font-size: 16pt; }
+.print-page p { margin: 0 0 6px; font-size: 10pt; }
 .print-table { border-collapse: collapse; margin-top: 8px; width: 100%; font-size: 10pt; }
 .print-table th, .print-table td { border: 1px solid #999; padding: 2px 6px; text-align: left; }
-.stops { column-count: 3; font-size: 9pt; margin: 8px 0 0; padding-left: 1.4em; }
-.stop-icon .stop { width: 20px; height: 20px; border-radius: 50%; color: #fff; font: 700 10px/20px system-ui, sans-serif; text-align: center; border: 2px solid #fff; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.stop-icon .stop { width: 22px; height: 22px; border-radius: 50%; color: #fff; font: 800 12px/18px system-ui, sans-serif; text-shadow: 0 0 2px #000, 0 0 2px #000; box-shadow: 0 0 3px rgba(0,0,0,.6); text-align: center; border: 2px solid #fff; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .stop-icon .stop.start { border-color: #000; }
 @media print {
+  @page { size: letter portrait; margin: 0.3in; }
   body > *:not(#print-root) { display: none !important; }
   #print-root { position: static; overflow: visible; padding: 0; }
   .print-bar { display: none; }
-  .print-page { border: 0; margin: 0; padding: 0; page-break-after: always; break-after: page; }
+  .print-page { border: 0; margin: 0; padding: 0; max-width: none; overflow: hidden; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+  .print-page:last-child { page-break-after: auto; break-after: auto; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
