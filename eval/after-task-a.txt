@@ -1,0 +1,9 @@
+source=kane houses=469 (dropped 28 disconnected) streets=23 groups=6 seed=1 iterations=8000 solve=0.9s feasible=true
+houses per group   : 77 77 80 78 79 78
+loop length (m)    : 4490 9840 4617 6878 4468 3745
+loop max / total   : 9840 / 34038 m
+split street names : 8 of 23 (336 houses on them)
+split segments     : 11 of 63 occupied
+overlap (hull)     : 0.964
+mean snap offset   : 19.5 m
+wrong-street rate  : 22.4 % (105 of 469; 105 of those on unnamed footway/service edges)

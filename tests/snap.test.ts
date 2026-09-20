@@ -211,3 +211,43 @@ describe('snapHouses tolerance and fallback behavior', () => {
     expect(g.edges[0].street).toBe('Oak St');
   });
 });
+
+describe('snapHouses street-name spelling', () => {
+  // Parcel data says "Bealer Cir" / "W Mallory Dr"; OSM says "Bealer Circle" / "West Mallory Drive".
+  const g = buildGraph({
+    nodes: [
+      [1, 42, -88.3],
+      [2, 42, -88.298],
+      [3, 42.00023, -88.3],
+      [4, 42.00023, -88.298],
+    ],
+    ways: [
+      { id: 1, name: 'Oak Street', highway: 'residential', nodes: [1, 2] }, // edge 0: nearer
+      { id: 2, name: 'Bealer Circle', highway: 'residential', nodes: [3, 4] }, // edge 1: ~14.5 m further
+    ],
+  });
+  const house = (street: string) => ({ id: street, lat: 42.00005, lon: -88.299, label: 'x', street, flagged: false, manual: false });
+
+  it('prefers the own street across Cir/Circle, case and punctuation', () => {
+    for (const s of ['Bealer Cir', 'BEALER CIRCLE', 'bealer cir.']) {
+      expect(snapHouses([house(s)], g)[0].edge).toBe(1);
+    }
+  });
+
+  it('still snaps to the nearest edge for a different street or an empty name', () => {
+    expect(snapHouses([house('Preston Cir')], g)[0].edge).toBe(0);
+    expect(snapHouses([house('')], g)[0].edge).toBe(0);
+  });
+
+  it('matches directional spellings and prefers the exact directional over a base-name match', () => {
+    const d = buildGraph({
+      nodes: [[1, 42, -88.3], [2, 42, -88.298], [3, 42.00006, -88.3], [4, 42.00006, -88.298]],
+      ways: [
+        { id: 1, name: 'East Mallory Drive', highway: 'residential', nodes: [1, 2] },
+        { id: 2, name: 'West Mallory Drive', highway: 'residential', nodes: [3, 4] },
+      ],
+    });
+    expect(snapHouses([house('W Mallory Dr')], d)[0].edge).toBe(1);
+    expect(snapHouses([house('E Mallory Dr')], d)[0].edge).toBe(0);
+  });
+});

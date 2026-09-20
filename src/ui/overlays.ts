@@ -2,6 +2,7 @@ import L from 'leaflet';
 import type { Tour } from '../types';
 import type { Model } from '../model';
 import { colorOf } from './groups';
+import { tourPolyline } from '../graph/route';
 
 export interface OverlayHandlers {
   onSegment?(segmentId: number, at: L.LatLng): void;
@@ -92,7 +93,8 @@ export class Overlays {
     tours.forEach((t, g) => {
       if (t.order.length === 0) return;
       const pts = t.order.map((idx) => [m.houses[idx].lat, m.houses[idx].lon] as L.LatLngTuple);
-      L.polyline([...pts, pts[0]], { color: colorOf(g), weight: 2, dashArray: '6 6', opacity: 0.9, interactive: false }).addTo(this.tours);
+      const route = tourPolyline(m, t.order).map((p) => [p.lat, p.lon] as L.LatLngTuple);
+      L.polyline(route, { color: colorOf(g), weight: 2, dashArray: '6 6', opacity: 0.9, interactive: false }).addTo(this.tours);
       L.circleMarker(pts[0], { radius: 8, color: '#000', weight: 2, fillColor: colorOf(g), fillOpacity: 1 })
         .bindTooltip(`Group ${g + 1} start`)
         .addTo(this.tours);

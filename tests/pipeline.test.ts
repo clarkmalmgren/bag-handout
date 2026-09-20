@@ -66,14 +66,15 @@ describe('solve pipeline on the synthetic grid', () => {
   });
 
   it('never moves locked houses', () => {
-    const start = solve(problem(0)).assign;
-    const free = solve(problem(3000, { initial: start })).assign;
+    // Seed 2 gives a start the optimizer clearly improves under door-to-door distances (12 movers).
+    const start = solve(problem(0, { seed: 2 })).assign;
+    const free = solve(problem(3000, { seed: 2, initial: start })).assign;
     const movers = start.map((g, i) => (free[i] !== g ? i : -1)).filter((i) => i >= 0);
     // Without locks the optimizer really does move houses, so the lock assertion below can fail.
     expect(movers.length).toBeGreaterThanOrEqual(4);
     const lockedIdx = new Set<number>([...movers.slice(0, Math.ceil(movers.length / 2)), 0, 1, 2]);
     const locked = houses.map((_, i) => lockedIdx.has(i));
-    const sol = solve(problem(3000, { initial: start, locked }));
+    const sol = solve(problem(3000, { seed: 2, initial: start, locked }));
     for (const i of lockedIdx) expect(sol.assign[i]).toBe(start[i]);
     // and the run is not a no-op: some unlocked house did move.
     expect(sol.assign.some((g, i) => !locked[i] && g !== start[i])).toBe(true);
@@ -131,8 +132,9 @@ describe('anneal invariants', () => {
       base += s0;
       after += s3;
     }
-    // Measured: about 6.9% mean improvement at 3000 iterations.
-    expect(after).toBeLessThan(base * 0.96);
+    // Measured: about 1.4% mean improvement at 3000 iterations. Door-to-street legs are a fixed cost every
+    // tour pays, so the relative gain on this symmetric grid is small; the margin still catches a no-op optimizer.
+    expect(after).toBeLessThan(base * 0.995);
   });
 
   it('more iterations does not systematically worsen the result', () => {

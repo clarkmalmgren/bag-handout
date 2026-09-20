@@ -7,6 +7,7 @@ import { colorOf } from '../ui/groups';
 import { addressOf } from './csv';
 import { disposeAll } from './dispose';
 import { fitBox, type LatLngPair } from './bounds';
+import { tourPolyline } from '../graph/route';
 
 const liveMaps = new Set<L.Map>();
 function disposeMaps(): void {
@@ -91,8 +92,8 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
   });
   tours.forEach((t, g) => {
     if (t.order.length === 0) return;
-    const pts = t.order.map(latlng);
-    L.polyline([...pts, pts[0]], { color: colorOf(g), weight: 2, dashArray: '5 5' }).addTo(om.map);
+    const route = tourPolyline(model, t.order).map((p) => [p.lat, p.lon] as LatLngPair);
+    L.polyline(route, { color: colorOf(g), weight: 2, dashArray: '5 5' }).addTo(om.map);
   });
 
   // One page per group.
@@ -114,10 +115,10 @@ export async function openPrintView(root: HTMLElement, view: AppView, cfg: Confi
     page.append(list);
     root.append(page);
 
-    const pts = t.order.map(latlng);
-    const gm = mountMap(mapDiv, pts);
+    const route = tourPolyline(model, t.order).map((p) => [p.lat, p.lon] as LatLngPair);
+    const gm = mountMap(mapDiv, route);
     ready.push(gm.ready);
-    L.polyline([...pts, pts[0]], { color: colorOf(g), weight: 3, dashArray: '6 6' }).addTo(gm.map);
+    L.polyline(route, { color: colorOf(g), weight: 3, dashArray: '6 6' }).addTo(gm.map);
     t.order.forEach((idx, k) => {
       const icon = L.divIcon({
         className: 'stop-icon',

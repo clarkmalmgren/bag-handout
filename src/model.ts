@@ -9,6 +9,8 @@ export interface Model {
   graph: Graph;
   snaps: Snap[];
   dist: Float32Array;
+  /** shortest-path oracle over `graph`, kept for reconstructing route geometry */
+  oracle: Oracle;
   segmentOf: number[];
   xy: XY[];
   disconnected: number[];
@@ -17,7 +19,8 @@ export interface Model {
 export function buildModel(houses: House[], osm: OsmData, crossingPenalty: number): Model {
   const graph = buildGraph(osm);
   const snaps = snapHouses(houses, graph);
-  const dist = buildDistMatrix(new Oracle(graph), graph, snaps, crossingPenalty);
+  const oracle = new Oracle(graph);
+  const dist = buildDistMatrix(oracle, graph, snaps, crossingPenalty);
 
   const ref = houses[0] ?? graph.coords[0] ?? { lat: 0, lon: 0 };
   const proj = makeProjector(ref);
@@ -48,7 +51,7 @@ export function buildModel(houses: House[], osm: OsmData, crossingPenalty: numbe
     if (comp[graph.edges[s.edge].a] !== main) disconnected.push(i);
   });
 
-  return { houses, graph, snaps, dist, segmentOf: snaps.map((s) => s.segment), xy, disconnected };
+  return { houses, graph, snaps, dist, oracle, segmentOf: snaps.map((s) => s.segment), xy, disconnected };
 }
 
 /**

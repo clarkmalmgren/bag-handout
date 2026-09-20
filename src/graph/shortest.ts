@@ -85,28 +85,73 @@ export class Oracle {
     }
     return d[b];
   }
+
+  /**
+   * Node sequence of one shortest path from a to b (inclusive), or [] when unreachable. Rebuilt from the
+   * cached distance array of `a` by walking back through tight edges, so distance queries stay unchanged.
+   */
+  path(a: number, b: number): number[] {
+    if (a === b) return [a];
+    if (!(this.nodeDist(a, b) < Infinity)) return [];
+    const d = this.cache.get(a)!;
+    const out = [b];
+    let cur = b;
+    while (cur !== a) {
+      let prev = -1;
+      let gap = Infinity;
+      for (const { to, w } of this.g.adj[cur]) {
+        const diff = Math.abs(d[to] + w - d[cur]);
+        if (diff < gap) {
+          gap = diff;
+          prev = to;
+        }
+      }
+      if (prev < 0 || out.length > this.g.coords.length) return [];
+      out.push(prev);
+      cur = prev;
+    }
+    return out.reverse();
+  }
 }
 
-// Walking distance between two snapped houses. On the same edge it is the along-edge gap, plus a
-// crossing penalty when the houses face each other across the street. Across different edges it is
-// the best of the four end-node combinations. Unreachable pairs are capped at UNREACHABLE so tour
-// arithmetic stays finite.
-export function houseDistance(oracle: Oracle, g: Graph, sa: Snap, sb: Snap, crossingPenalty: number): number {
-  if (sa.edge === sb.edge) {
-    return Math.abs(sa.along - sb.along) + (sa.side !== sb.side ? crossingPenalty : 0);
-  }
+/** The four end-node combinations for going between two different edges: [nodeA, legA, nodeB, legB]. */
+function endCombos(g: Graph, sa: Snap, sb: Snap): [number, number, number, number][] {
   const ea = g.edges[sa.edge];
   const eb = g.edges[sb.edge];
-  const ca: [number, number][] = [[ea.a, sa.along], [ea.b, ea.length - sa.along]];
-  const cb: [number, number][] = [[eb.a, sb.along], [eb.b, eb.length - sb.along]];
-  let best = Infinity;
-  for (const [na, oa] of ca) {
-    for (const [nb, ob] of cb) {
-      const d = oa + oracle.nodeDist(na, nb) + ob;
-      if (d < best) best = d;
-    }
+  return [
+    [ea.a, sa.along, eb.a, sb.along],
+    [ea.a, sa.along, eb.b, eb.length - sb.along],
+    [ea.b, ea.length - sa.along, eb.a, sb.along],
+    [ea.b, ea.length - sa.along, eb.b, eb.length - sb.along],
+  ];
+}
+
+/** Best end-node combination between two snaps on different edges, or null when unreachable. */
+export function bestCombo(oracle: Oracle, g: Graph, sa: Snap, sb: Snap): { na: number; nb: number; total: number } | null {
+  let best: { na: number; nb: number; total: number } | null = null;
+  for (const [na, oa, nb, ob] of endCombos(g, sa, sb)) {
+    const total = oa + oracle.nodeDist(na, nb) + ob;
+    if (total < Infinity && (!best || total < best.total)) best = { na, nb, total };
   }
-  return Math.min(best, UNREACHABLE);
+  return best;
+}
+
+// Walking distance between two snapped houses, door to door (each Snap.offset is the leg from the door to
+// the street). Unreachable pairs are capped at UNREACHABLE so tour arithmetic stays finite.
+//   same edge, same side      : hypot(along gap, |offset_a - offset_b|)  -- one diagonal walk beside the road,
+//                               no double counting of the shared door-to-street distance
+//   same edge, opposite sides : along gap + offset_a + offset_b + crossingPenalty  -- down to the street,
+//                               along and across it, up to the far door; always >= the same-side value
+//   different edges           : offset_a + offset_b + best end-node path through the graph
+export function houseDistance(oracle: Oracle, g: Graph, sa: Snap, sb: Snap, crossingPenalty: number): number {
+  if (sa.edge === sb.edge) {
+    const gap = Math.abs(sa.along - sb.along);
+    if (sa.side === sb.side) return Math.hypot(gap, Math.abs(sa.offset - sb.offset));
+    return gap + sa.offset + sb.offset + crossingPenalty;
+  }
+  const c = bestCombo(oracle, g, sa, sb);
+  if (!c) return UNREACHABLE;
+  return Math.min(sa.offset + c.total + sb.offset, UNREACHABLE);
 }
 
 export function buildDistMatrix(oracle: Oracle, g: Graph, snaps: Snap[], crossingPenalty: number): Float32Array {
