@@ -48,7 +48,11 @@ function parseConfig(raw: unknown): Config {
     weights: {
       maxRoute: weight(w.maxRoute, d.weights.maxRoute),
       total: weight(w.total, d.weights.total),
+      // Projects saved before the percentage tolerance have only `tolerance`; they keep it as the
+      // floor and pick up the default percentage, so an old file still loads and stays at least as tight.
+      toleranceFrac: clamp(w.toleranceFrac, 0, 1, d.weights.toleranceFrac),
       tolerance: clamp(w.tolerance, 0, 20, d.weights.tolerance),
+      compact: clamp(w.compact, 0, 100, d.weights.compact),
     },
   };
 }

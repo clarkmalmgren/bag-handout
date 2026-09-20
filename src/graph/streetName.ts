@@ -50,6 +50,44 @@ export function normalizeStreet(s: string): string {
 
 const DIR_WORDS = new Set(Object.values(DIRECTIONAL));
 
+/** Levenshtein distance, giving up (returning max + 1) as soon as it is certain to exceed `max`. */
+export function editDistance(a: string, b: string, max = Infinity): number {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = new Array<number>(b.length + 1);
+    row[0] = i;
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      row[j] = Math.min(row[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      if (row[j] < best) best = row[j];
+    }
+    if (best > max) return max + 1;
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+/**
+ * True when two street names look like the same street spelled differently. Parcel data and OSM
+ * disagree by a letter or two on some names ("Haladay" vs "Halliday", "Ellithorp" vs "Ellithorpe"),
+ * which otherwise costs those houses their same-street snap preference.
+ *
+ * Deliberately conservative, because a wrong match snaps a house to the wrong road: both names must
+ * be at least 6 characters, start with the same letter and be within 2 edits of each other. That
+ * keeps short, genuinely different names apart ("Oak Ln" / "Ash Ln") and never merges two real
+ * neighbouring streets unless they are near-homographs.
+ */
+export function fuzzySameStreet(a: string, b: string): boolean {
+  if (a === '' || b === '') return false;
+  if (a === b) return true;
+  if (a.length < 6 || b.length < 6) return false;
+  if (a[0] !== b[0]) return false;
+  return editDistance(a, b, 2) <= 2;
+}
+
 /** normalizeStreet without directional words, for a looser match ("East Mallory Drive" ~ "West Mallory Drive"). */
 export function streetBase(s: string): string {
   const t = normalizeStreet(s).split(' ').filter(Boolean);

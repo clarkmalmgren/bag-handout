@@ -47,6 +47,23 @@ describe('project serialize/parse', () => {
   });
 });
 
+describe('projects saved before the percentage tolerance', () => {
+  // Files written by the +-2 version have weights {maxRoute, total, tolerance} and nothing else.
+  const old = '{"version":1,"config":{"groups":6,"crossingPenalty":8,"iterations":8000,"seed":1,"walkSpeed":1.2,"secPerHouse":20,"weights":{"maxRoute":1,"total":0.3,"tolerance":2}}}';
+  it('load, keep their absolute tolerance as the floor and pick up the new defaults', () => {
+    const c = parseProject(old).config;
+    expect(c.weights.tolerance).toBe(2);
+    expect(c.weights.toleranceFrac).toBe(0.1);
+    expect(c.weights.compact).toBe(2.5);
+    expect(c.groups).toBe(6);
+  });
+  it('round-trip through serialize with the new fields present', () => {
+    const s = emptyState();
+    s.config = parseProject(old).config;
+    expect(parseProject(serializeProject(s)).config).toEqual(s.config);
+  });
+});
+
 describe('ringOf', () => {
   it('returns null without a boundary', () => {
     expect(ringOf(null)).toBeNull();
@@ -129,7 +146,7 @@ describe('parseProject validation', () => {
   it('clamps config values into range', () => {
     const c = parseProject(JSON.stringify({
       version: 1,
-      config: { groups: 99.6, iterations: -5, crossingPenalty: 1e9, walkSpeed: 0, secPerHouse: 601, seed: 3.7, weights: { tolerance: 50, maxRoute: 2, total: 0.5 } },
+      config: { groups: 99.6, iterations: -5, crossingPenalty: 1e9, walkSpeed: 0, secPerHouse: 601, seed: 3.7, weights: { tolerance: 50, toleranceFrac: 9, compact: -3, maxRoute: 2, total: 0.5 } },
     })).config;
     expect(c.groups).toBe(12);
     expect(c.iterations).toBe(0);
@@ -137,13 +154,13 @@ describe('parseProject validation', () => {
     expect(c.walkSpeed).toBe(0.1);
     expect(c.secPerHouse).toBe(600);
     expect(c.seed).toBe(4);
-    expect(c.weights).toEqual({ maxRoute: 2, total: 0.5, tolerance: 20 });
+    expect(c.weights).toEqual({ maxRoute: 2, total: 0.5, toleranceFrac: 1, tolerance: 20, compact: 0 });
     expect(parseProject(JSON.stringify({ version: 1, config: { groups: 1 } })).config.groups).toBe(2);
   });
 
   it('falls back to defaults for non-finite or unparseable values', () => {
     const d = emptyState().config;
-    const c = parseProject('{"version":1,"config":{"groups":"abc","iterations":null,"walkSpeed":{},"secPerHouse":[],"crossingPenalty":"","seed":true,"weights":{"maxRoute":-1,"total":"x","tolerance":null}}}').config;
+    const c = parseProject('{"version":1,"config":{"groups":"abc","iterations":null,"walkSpeed":{},"secPerHouse":[],"crossingPenalty":"","seed":true,"weights":{"maxRoute":-1,"total":"x","tolerance":null,"toleranceFrac":"nope","compact":{}}}}').config;
     expect(c).toEqual(d);
     expect(parseProject('{"version":1,"config":"nope"}').config).toEqual(d);
     expect(parseProject('{"version":1,"config":{"groups":"4"}}').config.groups).toBe(4);

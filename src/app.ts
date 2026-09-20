@@ -5,7 +5,8 @@ import { buildModel, canSolve, type Model } from './model';
 import { TourCache } from './tourCache';
 import { type SolveProblem } from './solver/solve';
 import { runSolve } from './ui/solveClient';
-import { groupStats } from './stats';
+import { groupStats, splitStreetCount } from './stats';
+import { effectiveTolerance } from './solver/cost';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
 import { colorOf, renderPanel } from './ui/groups';
 import { adoptNearest, inputSignature, solveIsStale, visibleHouses } from './edit';
@@ -79,6 +80,8 @@ export function initApp(ctx: {
     const s = store.state;
     ensureModel();
     ($('groups') as HTMLInputElement).value = String(s.config.groups);
+    ($('tolerance-pct') as HTMLInputElement).value = String(Math.round(s.config.weights.toleranceFrac * 100));
+    ($('compact') as HTMLInputElement).value = String(s.config.weights.compact);
     const a = prepareAssignments();
     const groups = s.config.groups;
     // Only groups whose membership changed are re-routed; after a solve the cache holds the solver's own tours.
@@ -90,7 +93,7 @@ export function initApp(ctx: {
 
   function draw(a: number[]): void {
     const s = store.state;
-    const tol = s.config.weights.tolerance;
+    const tol = effectiveTolerance(visible.length / Math.max(1, s.config.groups), s.config.weights);
     ($('remove-disc') as HTMLButtonElement).hidden = true;
     if (!model) {
       overlays.clear();
@@ -106,7 +109,9 @@ export function initApp(ctx: {
     const sizes: number[] = Array(groups).fill(0);
     a.forEach((g) => { if (g >= 0 && g < groups) sizes[g]++; });
     const lengths = Array.from({ length: groups }, (_, g) => tours[g]?.length ?? 0);
-    const stats = tours.length > 0 ? groupStats(sizes, lengths, s.config) : [];
+    const streets = visible.map((h) => h.street);
+    const stats = tours.length > 0 ? groupStats(sizes, lengths, s.config, { tours, streets }) : [];
+    const split = tours.length > 0 ? splitStreetCount(streets, a) : undefined;
 
     const warnings: string[] = [];
     if (model.disconnected.length > 0) {
@@ -117,7 +122,7 @@ export function initApp(ctx: {
     rd.textContent = `Remove ${model.disconnected.length} disconnected house${model.disconnected.length === 1 ? '' : 's'}`;
     const flagged = visible.filter((h) => h.flagged).length;
     if (flagged > 0) warnings.push(`${flagged} buildings have no address — review them on the map.`);
-    renderPanel($('panel'), stats, visible.length / groups, tol, warnings);
+    renderPanel($('panel'), stats, visible.length / groups, tol, warnings, split);
   }
 
   async function solveNow(fresh: boolean): Promise<void> {
@@ -184,6 +189,14 @@ export function initApp(ctx: {
     const n = Math.max(2, Math.min(12, Number((ev.target as HTMLInputElement).value) || 6));
     store.update((st) => { st.config.groups = n; }, { undoable: false });
   });
+  $('tolerance-pct').addEventListener('change', (ev) => {
+    const pct = Math.max(0, Math.min(100, Number((ev.target as HTMLInputElement).value) || 0));
+    store.update((st) => { st.config.weights.toleranceFrac = pct / 100; }, { undoable: false });
+  });
+  $('compact').addEventListener('change', (ev) => {
+    const v = Math.max(0, Math.min(100, Number((ev.target as HTMLInputElement).value) || 0));
+    store.update((st) => { st.config.weights.compact = v; }, { undoable: false });
+  });
 
   function reassignSegment(segmentId: number, group: number): void {
     const m = model;
@@ -197,7 +210,8 @@ export function initApp(ctx: {
     const sizes: number[] = Array(store.state.config.groups).fill(0);
     assignIdx().forEach((g) => { if (g >= 0 && g < sizes.length) sizes[g]++; });
     const mean = houses.length / sizes.length;
-    const off = sizes.findIndex((n) => Math.abs(n - mean) > store.state.config.weights.tolerance);
+    const tol = effectiveTolerance(mean, store.state.config.weights);
+    const off = sizes.findIndex((n) => Math.abs(n - mean) > tol);
     status(off >= 0 ? `Group ${off + 1} is now ${sizes[off]} houses (mean ${mean.toFixed(1)}) — allowed, but unbalanced` : 'Moved');
   }
 

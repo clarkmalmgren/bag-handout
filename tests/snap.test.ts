@@ -251,3 +251,42 @@ describe('snapHouses street-name spelling', () => {
     expect(snapHouses([house('E Mallory Dr')], d)[0].edge).toBe(0);
   });
 });
+
+describe('snapHouses fuzzy street spelling', () => {
+  // Parcel data and OSM disagree by a letter or two: "Haladay Ln" vs "Halliday Lane",
+  // "Ellithorp Ln" vs "Ellithorpe Lane".
+  const gridOf = (near: string, far: string) =>
+    buildGraph({
+      nodes: [
+        [1, 42, -88.3],
+        [2, 42, -88.298],
+        [3, 42.00023, -88.3],
+        [4, 42.00023, -88.298],
+      ],
+      ways: [
+        { id: 1, name: near, highway: 'residential', nodes: [1, 2] }, // edge 0: nearer
+        { id: 2, name: far, highway: 'residential', nodes: [3, 4] }, // edge 1: ~14.5 m further
+      ],
+    });
+  const house = (street: string) => ({ id: street, lat: 42.00005, lon: -88.299, label: 'x', street, flagged: false, manual: false });
+
+  it('prefers a near-spelling of its own street over a nearer different street', () => {
+    expect(snapHouses([house('Haladay Ln')], gridOf('Oak Street', 'Halliday Lane'))[0].edge).toBe(1);
+    expect(snapHouses([house('Ellithorp Ln')], gridOf('Oak Street', 'Ellithorpe Lane'))[0].edge).toBe(1);
+  });
+
+  it('still prefers an exact or directional match over a fuzzy one', () => {
+    expect(snapHouses([house('Halliday Ln')], gridOf('Halliday Lane', 'Haliday Lane'))[0].edge).toBe(0);
+  });
+
+  it('does not fuzzy-match short or clearly different names', () => {
+    // "oak lane" vs "elm lane": same length but 3 edits, and both base words are short.
+    expect(snapHouses([house('Elm Ln')], gridOf('Oak Street', 'Oak Lane'))[0].edge).toBe(0);
+    expect(snapHouses([house('Preston Cir')], gridOf('Oak Street', 'Branford Circle'))[0].edge).toBe(0);
+  });
+
+  it('keeps two genuinely different long streets apart', () => {
+    // 3 edits: "brannon lane" vs "branford lane" must not merge.
+    expect(snapHouses([house('Brannon Ln')], gridOf('Oak Street', 'Branford Lane'))[0].edge).toBe(0);
+  });
+});

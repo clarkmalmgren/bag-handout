@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeStreet, streetBase } from '../src/graph/streetName';
+import { editDistance, fuzzySameStreet, normalizeStreet, streetBase } from '../src/graph/streetName';
 
 describe('normalizeStreet', () => {
   it('expands suffixes to one canonical form', () => {
@@ -51,5 +51,36 @@ describe('streetBase', () => {
     expect(streetBase('E Mallory Dr')).toBe(streetBase('West Mallory Drive'));
     expect(streetBase('Mill Creek Cir W')).toBe('mill creek circle');
     expect(streetBase('')).toBe('');
+  });
+});
+
+describe('editDistance', () => {
+  it('counts insertions, deletions and substitutions', () => {
+    expect(editDistance('', '')).toBe(0);
+    expect(editDistance('abc', 'abc')).toBe(0);
+    expect(editDistance('haladay', 'halliday')).toBe(2);
+    expect(editDistance('ellithorp', 'ellithorpe')).toBe(1);
+    expect(editDistance('kitten', 'sitting')).toBe(3);
+  });
+  it('gives up early past the cap', () => {
+    expect(editDistance('kitten', 'sitting', 2)).toBe(3);
+    expect(editDistance('abcdef', 'zzzzzzzzzz', 2)).toBe(3);
+  });
+});
+
+describe('fuzzySameStreet', () => {
+  it('accepts the known parcel/OSM spelling differences', () => {
+    expect(fuzzySameStreet('haladay lane', 'halliday lane')).toBe(true);
+    expect(fuzzySameStreet('ellithorp lane', 'ellithorpe lane')).toBe(true);
+  });
+  it('rejects short names, different first letters and names more than 2 edits apart', () => {
+    expect(fuzzySameStreet('oak ln', 'elm ln')).toBe(false);
+    expect(fuzzySameStreet('mallory drive', 'gallory drive')).toBe(false);
+    expect(fuzzySameStreet('brannon lane', 'branford lane')).toBe(false);
+    expect(fuzzySameStreet('', 'anything long')).toBe(false);
+  });
+  it('accepts identical names and is symmetric', () => {
+    expect(fuzzySameStreet('preston circle', 'preston circle')).toBe(true);
+    expect(fuzzySameStreet('halliday lane', 'haladay lane')).toBe(true);
   });
 });

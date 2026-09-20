@@ -19,7 +19,7 @@ export function defaultConfig(): Config {
   return {
     groups: 6,
     crossingPenalty: 8,
-    weights: { maxRoute: 1, total: 0.3, tolerance: 2 },
+    weights: { maxRoute: 1, total: 0.3, toleranceFrac: 0.1, tolerance: 2, compact: 2.5 },
     iterations: 8000,
     seed: 1,
     walkSpeed: 1.2,

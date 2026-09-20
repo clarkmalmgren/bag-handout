@@ -21,6 +21,8 @@
         <button id="refetch" title="Fetch again, ignoring cached house and road data">Re-fetch (ignore cache)</button>
         <button id="add-house" title="Click the map to add a house">Add house</button>
         <label>Groups <input id="groups" type="number" min="2" max="12" value="6" /></label>
+        <label title="Hard limit on how far a group's house count may sit from the mean, as a percentage of the mean (never less than 2 houses)">Balance ± <input id="tolerance-pct" type="number" min="0" max="100" step="1" value="10" /> %</label>
+        <label title="How much compact, solid group shapes are worth: metres of walking charged per neighbouring house that ends up in another group (0 turns it off)">Compactness <input id="compact" type="number" min="0" max="100" step="0.5" value="2.5" /></label>
         <button id="solve">Solve</button>
         <button id="reopt" title="Re-optimize from current assignment, keeping locked streets">Re-optimize</button>
         <button id="remove-disc" hidden title="Remove houses that are not connected to the main street network">Remove disconnected houses</button>

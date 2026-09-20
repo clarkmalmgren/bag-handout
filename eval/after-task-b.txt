@@ -1,0 +1,71 @@
+source=kane houses=469 (dropped 28 disconnected) streets=23 groups=6 seed=1 iterations=8000 solve=0.6s feasible=true
+weights            : maxRoute=1 total=0.3 compact=2.5 tolerance=+-10% (min 2) -> +-7 houses
+houses per group   : 82 72 77 72 83 83
+loop length (m)    : 4554 8815 4341 6449 4880 3707
+loop max / total   : 8815 / 32745 m (max / mean = 1.62)
+street changes     : 9 9 7 6 11 6
+kNN cut links      : 147
+split street names : 7 of 23 (318 houses on them)
+split segments     : 8 of 60 occupied
+overlap (hull)     : 0.155
+mean snap offset   : 21.1 m
+wrong-street rate  : 22.4 % (105 of 469; 23 of those on unnamed footway/service edges)
+
+Task B: compactness objective, percentage balance tolerance, tighter contiguity guard,
+street-run moves, fuzzy street-name snapping.
+
+Comparison (seed 1, default config, real Mill Creek data, 469 houses, 6 groups)
+
+  run           max loop   total   split streets   hull overlap   sizes    solve
+  baseline        8475 m  25458 m       11 of 23          2.514   77-80     0.8 s
+  after task A    9840 m  34038 m        8 of 23          0.964   77-80     0.9 s
+  after task B    8815 m  32745 m        7 of 23          0.155   72-83     0.6 s
+
+The baseline's distances are not comparable with the later two: before task A the walking distances
+did not follow the roads door to door (mean snap offset 12.8 m, wrong-street rate 96 %), so its
+loops are much shorter on paper than they are on foot. Task A is the meaningful "before".
+
+Compact-weight sweep (mean over seeds 1-4, link 80 m, tolerance +-10%)
+
+  weights.compact   max loop   total   split streets   hull overlap   kNN cut   sizes
+        0             8366 m  33304 m      7.3 of 23          0.858       210   72-85
+        1             8314 m  33345 m      7.5 of 23          0.987       140   72-85
+        2.5 (chosen)  8002 m  32645 m      7.8 of 23          0.190       138   72-85
+        5             8031 m  33119 m      8.0 of 23          0.552       126   72-85
+        2.5, link 150 8114 m  32286 m      8.0 of 23          0.516       115   72-85
+
+Chosen defaults: weights.compact = 2.5 (one cut neighbour link = 2.5 x 30 m of walking),
+weights.toleranceFrac = 0.10 with weights.tolerance = 2 as the floor (mean 78 -> +-7 houses),
+link distance 80 m, iterations 8000 (20k/40k/80k were measured: no better, only slower).
+
+What the targets did and did not reach
+- hull overlap: target < 0.25, reached (0.155 at seed 1, 0.190 mean over 4 seeds, from 0.964).
+- longest loop: target < 1.6 x mean, 1.62 at seed 1 (1.47 mean over seeds 1-4). The one long group
+  covers the spread-out south end; raising weights.maxRoute to 2 shortens it to 7711 m but pushes
+  hull overlap back up to ~0.66, so the trade was not taken.
+- split street names: target <= 6, reached 7 (from 8). With 6 groups there are at least 5 internal
+  boundaries, and on this map most of them have to fall part-way along a street rather than at a
+  junction (S Mill Creek Dr alone runs the length of the subdivision), so 5-7 is close to the floor.
+  compact = 0 splits marginally fewer streets but interleaves the groups much more (overlap 0.86).
+
+Two seed rewrites were implemented, measured and rejected, both much worse than the plain balanced
+k-means seed that ships (hull overlap after annealing, mean of 4 seeds):
+- region growing over the walking-distance link graph (balanced, one connected region per group):
+  2.16 with straight-line growth priority, 2.45 with walking-distance priority, vs 0.19 shipped.
+- k-means plus fragment repair (small walking-disconnected pieces handed to the neighbouring group
+  they touch): 2.34. Both fail for the same reason: a house that is walking-far from its group but
+  spatially inside it (cul-de-sac ends, houses backing onto each other) gets pushed to a group that
+  is nearer on foot but elsewhere on the map, which is exactly the mixing the user objects to.
+
+Contiguity guard: 50 m was measured and is not usable on this data. The door-to-door distance to a
+house's nearest neighbour is 27 m (p50) but 58 m (p90), so below about 70 m a boundary house has no
+house of the receiving group within the link distance, every move adds a component, the guard
+rejects it, and the annealer stops moving (solve time drops to 0.3 s and the result is the seed).
+80 m is the tightest value that keeps the chain moving; it halves the hull overlap versus the old
+150 m (0.19 vs 0.52 mean) and the guard still earns its place (0.19 with the guard vs 0.57 with it
+switched off).
+
+Street-name fuzz: houses on "Haladay Ln"/"Ellithorp Ln" now snap to OSM's "Halliday Lane"/
+"Ellithorpe Lane". Mean snap offset rises 19.5 -> 21.1 m (they moved to their real street, which is
+slightly further away) and, of the 105 houses the evaluation's independent normaliser calls
+wrong-street, only 23 are still on unnamed footway/service edges instead of all 105.

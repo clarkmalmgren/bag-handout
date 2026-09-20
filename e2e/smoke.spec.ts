@@ -8,6 +8,7 @@ import { emptyState } from '../src/state';
 import { serializeProject } from '../src/project';
 import { buildModel } from '../src/model';
 import { solve } from '../src/solver/solve';
+import { effectiveTolerance } from '../src/solver/cost';
 
 const groupLengths = (page: Page) =>
   page.locator('.group-row').evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.length)));
@@ -39,7 +40,8 @@ test('load synthetic project, solve into 4 balanced groups, edit a street, open 
   await expect(page.locator('.group-row')).toHaveCount(4);
   const counts = await groupCounts(page);
   expect(counts.reduce((a, b) => a + b, 0)).toBe(120);
-  for (const c of counts) expect(Math.abs(c - 30)).toBeLessThanOrEqual(2);
+  const tol = effectiveTolerance(30, s.config.weights); // mean 30, +-10% -> 3
+  for (const c of counts) expect(Math.abs(c - 30)).toBeLessThanOrEqual(tol);
 
   // The panel must show the solver's own tours: repeat the (deterministic) solve in node and compare loop lengths.
   const model = buildModel(houses, osm, s.config.crossingPenalty);

@@ -1,6 +1,7 @@
 import type { Dist, Tour, Weights, XY } from '../types';
 import { mulberry32 } from '../rng';
 import { seedPartition } from './seed';
+import { effectiveTolerance } from './cost';
 import { anneal, type Solution } from './anneal';
 import { UNREACHABLE } from '../graph/shortest';
 import { solveTour, rotateToStart } from './tsp';
@@ -21,7 +22,18 @@ export interface SolveProblem {
   linkDistance?: number;
 }
 
-const DEFAULT_LINK_DISTANCE = 150;
+/**
+ * Walking metres within which two houses count as "next door" for the contiguity guard.
+ *
+ * Measured on the Mill Creek data the door-to-door distance to a house's nearest neighbour is about
+ * 27 m (p50) and 58 m (p90), so 80 m links a house to its neighbours and their neighbours without
+ * bridging a block, a creek or a pond. It used to be 150 m, which linked houses two streets apart
+ * and let the guard pass badly interleaved groups (measured: dropping 150 -> 80 more than halves the
+ * hull-overlap metric). Below about 70 m the guard becomes self-defeating on this data: a boundary
+ * house's nearest house in another group is often farther than that, so *every* move would add a
+ * component and be rejected, and the annealer stops moving at all.
+ */
+export const DEFAULT_LINK_DISTANCE = 80;
 
 export function matrixDist(m: Float32Array, n: number): Dist {
   return (i, j) => m[i * n + j];
@@ -46,7 +58,11 @@ export function solve(p: SolveProblem, onProgress?: (iter: number, best: number)
     p.initial.length === p.houseCount &&
     p.initial.every((g) => Number.isInteger(g) && g >= 0 && g < p.groups) &&
     new Set(p.initial).size === p.groups; // an empty group can never be refilled, so reseed
-  const initial = valid ? p.initial! : seedPartition(p.xy, p.groups, rng, p.weights.tolerance);
+  const link = p.linkDistance ?? DEFAULT_LINK_DISTANCE;
+  const tol = effectiveTolerance(p.groups > 0 ? p.houseCount / p.groups : 0, p.weights);
+  const initial = valid
+    ? p.initial!
+    : seedPartition(p.xy, p.groups, rng, tol);
   return anneal({
     dist,
     houseCount: p.houseCount,
@@ -57,7 +73,8 @@ export function solve(p: SolveProblem, onProgress?: (iter: number, best: number)
     weights: p.weights,
     iterations: p.iterations,
     rng,
-    linkDistance: p.linkDistance ?? DEFAULT_LINK_DISTANCE,
+    linkDistance: link,
+    xy: p.xy,
     onProgress,
   });
 }

@@ -8,6 +8,8 @@ import { buildModel } from '../src/model';
 import { solve } from '../src/solver/solve';
 import { defaultConfig } from '../src/state';
 import { evalNorm, overlapMetric } from './metrics';
+import { effectiveTolerance } from '../src/solver/cost';
+import { streetChanges } from '../src/stats';
 
 // Evaluation on the real Mill Creek data. Run with `npm run eval`; the CSV is only used for its bounding box.
 // Set EVAL_OUT=path to also write the report to a file.
@@ -108,11 +110,18 @@ it('millcreek evaluation', async () => {
   const splitSegs = [...segGroups.values()].filter((s) => s.size > 1).length;
   const usedSegs = segGroups.size;
 
+  const total = lengths.reduce((a, b) => a + b, 0);
+  const tol = effectiveTolerance(n / G, cfg.weights);
+  const changes = sol.tours.map((t) => streetChanges(t.order, model.houses.map((h) => h.street)));
+
   const lines = [
     `source=${data.source} houses=${n} (dropped ${dropped} disconnected) streets=${streetGroups.size} groups=${G} seed=${cfg.seed} iterations=${cfg.iterations} solve=${f(secs)}s feasible=${sol.feasible}`,
+    `weights            : maxRoute=${cfg.weights.maxRoute} total=${cfg.weights.total} compact=${cfg.weights.compact} tolerance=+-${(100 * cfg.weights.toleranceFrac).toFixed(0)}% (min ${cfg.weights.tolerance}) -> +-${tol} houses`,
     `houses per group   : ${counts.join(' ')}`,
     `loop length (m)    : ${lengths.map((l) => Math.round(l)).join(' ')}`,
-    `loop max / total   : ${f(Math.max(...lengths), 0)} / ${f(lengths.reduce((a, b) => a + b, 0), 0)} m`,
+    `loop max / total   : ${f(Math.max(...lengths), 0)} / ${f(total, 0)} m (max / mean = ${f(Math.max(...lengths) / (total / G), 2)})`,
+    `street changes     : ${changes.join(' ')}`,
+    `kNN cut links      : ${sol.cut}`,
     `split street names : ${splitStreets} of ${streetGroups.size} (${splitStreetHouses} houses on them)`,
     `split segments     : ${splitSegs} of ${usedSegs} occupied`,
     `overlap (hull)     : ${f(overlapMetric(model.xy, sol.assign, G), 3)}`,

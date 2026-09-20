@@ -39,8 +39,12 @@ export interface Weights {
   maxRoute: number;
   /** weight on the sum of route lengths */
   total: number;
-  /** hard house-count tolerance around the mean */
+  /** hard house-count tolerance around the mean, as a fraction of the mean (0.1 = +-10%) */
+  toleranceFrac: number;
+  /** smallest hard house-count tolerance in houses; used when the percentage works out smaller */
   tolerance: number;
+  /** weight on the compactness (kNN mixing) term, in metres per cut neighbour link */
+  compact: number;
 }
 
 export interface Config {

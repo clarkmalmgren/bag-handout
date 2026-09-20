@@ -6,7 +6,7 @@ describe('defaultConfig / emptyState', () => {
     const c = defaultConfig();
     expect(c.groups).toBe(6);
     expect(c.crossingPenalty).toBe(8);
-    expect(c.weights).toEqual({ maxRoute: 1, total: 0.3, tolerance: 2 });
+    expect(c.weights).toEqual({ maxRoute: 1, total: 0.3, toleranceFrac: 0.1, tolerance: 2, compact: 2.5 });
     expect(c.iterations).toBe(8000);
     expect(c.seed).toBe(1);
     expect(c.walkSpeed).toBe(1.2);
