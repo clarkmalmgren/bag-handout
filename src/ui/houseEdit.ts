@@ -64,7 +64,7 @@ export class HouseEditor {
 
 // Plain dots for Task 3; the group-coloured Overlays class (Part C) supersedes this
 // but keeps calling HouseEditor.remove for the popup's Remove button.
-export function renderHouseDots(layer: L.LayerGroup, houses: House[], onRemove: (id: string) => void): void {
+export function renderHouseDots(layer: L.LayerGroup, houses: House[], onRemove: (id: string) => void, selected: Set<string> = new Set()): void {
   layer.clearLayers();
   for (const h of houses) {
     const dot = L.circleMarker([h.lat, h.lon], {
@@ -84,5 +84,8 @@ export function renderHouseDots(layer: L.LayerGroup, houses: House[], onRemove: 
     box.append(btn);
     dot.bindPopup(box);
     dot.addTo(layer);
+    if (selected.has(h.id)) {
+      L.circleMarker([h.lat, h.lon], { radius: 9, color: '#00e5ff', weight: 3, fillColor: '#00e5ff', fillOpacity: 0.25, interactive: false }).addTo(layer);
+    }
   }
 }

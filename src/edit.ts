@@ -88,3 +88,44 @@ export function lockedFlags(houses: { id: string }[], segmentKeyOf: string[], lo
   const ids = new Set(lockedHouses);
   return houses.map((h, i) => keys.has(segmentKeyOf[i]) || ids.has(h.id));
 }
+
+/** Axis-aligned lat/lng box (edges inclusive). */
+export interface BoundsLike { south: number; west: number; north: number; east: number }
+
+/** Ids of the houses inside the box, skipping removed ones (order of `houses`). */
+export function housesInBounds(houses: House[], b: BoundsLike, removed: Iterable<string> = []): string[] {
+  const gone = new Set(removed);
+  return houses
+    .filter((h) => !gone.has(h.id) && h.lat >= b.south && h.lat <= b.north && h.lon >= b.west && h.lon <= b.east)
+    .map((h) => h.id);
+}
+
+/** Moves many houses to a group (one undoable store update when called inside Store.update). */
+export function moveHouses(s: { assignment: Record<string, number> }, ids: Iterable<string>, group: number): void {
+  for (const id of ids) s.assignment[id] = group;
+}
+
+/** Bulk lock toggle: if every house is locked they are all unlocked, otherwise all become locked. Returns true when now locked. */
+export function toggleHousesLock(s: { lockedHouses: string[] }, ids: string[]): boolean {
+  const set = new Set(s.lockedHouses);
+  const allLocked = ids.length > 0 && ids.every((id) => set.has(id));
+  if (allLocked) {
+    const drop = new Set(ids);
+    s.lockedHouses = s.lockedHouses.filter((id) => !drop.has(id));
+    return false;
+  }
+  for (const id of ids) if (!set.has(id)) s.lockedHouses.push(id);
+  return ids.length > 0;
+}
+
+/** Per-group counts of the selected houses (out-of-range or missing assignment counts as unassigned). */
+export function selectionSummary(ids: Iterable<string>, assignment: Record<string, number>, groups: number): { counts: number[]; unassigned: number } {
+  const counts: number[] = Array(groups).fill(0);
+  let unassigned = 0;
+  for (const id of ids) {
+    const g = assignment[id];
+    if (g !== undefined && g >= 0 && g < groups) counts[g]++;
+    else unassigned++;
+  }
+  return { counts, unassigned };
+}

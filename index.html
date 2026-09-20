@@ -11,7 +11,7 @@
       #toolbar label { font-size: 13px; }
       #toolbar input[type=number] { width: 4em; }
       #status { margin-left: auto; font-size: 13px; color: #374151; }
-      #map { min-height: 0; }
+      #map { min-height: 0; position: relative; }
     </style>
   </head>
   <body>
@@ -20,6 +20,7 @@
         <button id="fetch" title="Fetch houses and roads for the drawn boundary">Fetch houses</button>
         <button id="refetch" title="Fetch again, ignoring cached house and road data">Re-fetch (ignore cache)</button>
         <button id="add-house" title="Click the map to add a house">Add house</button>
+        <button id="select-area" title="Select area: drag a rectangle over houses to move or lock them together. Shortcut: hold Ctrl (or Alt) and drag on the map. Esc exits.">Select area</button>
         <label>Groups <input id="groups" type="number" min="2" max="12" value="6" /></label>
         <label title="Hard limit on how far a group's house count may sit from the mean, as a percentage of the mean (never less than 2 houses)">Balance ± <input id="tolerance-pct" type="number" min="0" max="100" step="1" value="10" /> %</label>
         <label title="How much compact, solid group shapes are worth: metres of walking charged per neighbouring house that ends up in another group (0 turns it off)">Compactness <input id="compact" type="number" min="0" max="100" step="0.5" value="2.5" /></label>
@@ -34,7 +35,7 @@
         <button id="export-csv">Export CSV</button>
         <span id="status">Draw a boundary to begin.</span>
       </div>
-      <div id="map"></div>
+      <div id="map"><div id="select-panel" class="select-panel" hidden></div></div>
       <aside id="panel"></aside>
     </div>
     <div id="print-root" hidden></div>

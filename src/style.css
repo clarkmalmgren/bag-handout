@@ -30,3 +30,12 @@
   .print-page:last-child { page-break-after: auto; break-after: auto; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+button.active { background: #2563eb; color: #fff; border-color: #1d4ed8; }
+.area-select-box { position: absolute; z-index: 800; pointer-events: none; box-sizing: border-box; border: 2px dashed #00b8d4; background: rgba(0, 229, 255, 0.15); }
+#map.select-mode { cursor: crosshair; }
+.select-panel { position: absolute; z-index: 900; left: 10px; bottom: 24px; max-width: 300px; background: #fff; border: 2px solid #00b8d4; border-radius: 6px; padding: 8px; font: 13px system-ui, sans-serif; box-shadow: 0 1px 6px rgba(0,0,0,.4); display: flex; flex-direction: column; gap: 6px; }
+.select-panel[hidden] { display: none; }
+.select-title { font-weight: 600; }
+.house-groups { display: flex; flex-wrap: wrap; gap: 4px; }
+.select-actions { display: flex; gap: 6px; }

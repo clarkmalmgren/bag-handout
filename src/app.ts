@@ -9,8 +9,10 @@ import { groupStats, splitStreetCount } from './stats';
 import { effectiveTolerance } from './solver/cost';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
 import { colorOf, renderPanel } from './ui/groups';
-import { adoptNearest, inputSignature, lockedFlags, moveHouse, toggleHouseLock, solveIsStale, visibleHouses } from './edit';
+import { adoptNearest, housesInBounds, inputSignature, lockedFlags, moveHouse, moveHouses, selectionSummary, toggleHouseLock, toggleHousesLock, solveIsStale, visibleHouses } from './edit';
 import { renderHouseDots } from './ui/houseEdit';
+import { AreaSelect } from './ui/areaSelect';
+import { renderSelectionPanel } from './ui/selectionPanel';
 
 export interface AppView {
   model: Model | null;
@@ -40,6 +42,8 @@ export function initApp(ctx: {
   let visible: House[] = [];
   let tours: Tour[] = [];
   const tourCache = new TourCache();
+  /** ids of the houses picked with the selection rectangle */
+  let selected = new Set<string>();
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const status = (t: string) => { $('status').textContent = t; };
@@ -88,6 +92,11 @@ export function initApp(ctx: {
     tours = model && a.length > 0 && a.every((g) => g >= 0 && g < groups)
       ? tourCache.routeAll(model.dist, visible.length, a, groups)
       : [];
+    // Drop selected houses that were removed (or vanished with a re-fetch/load).
+    if (selected.size > 0) {
+      const vis = new Set(visible.map((h) => h.id));
+      for (const id of [...selected]) if (!vis.has(id)) selected.delete(id);
+    }
     draw(a);
   }
 
@@ -97,13 +106,15 @@ export function initApp(ctx: {
     ($('remove-disc') as HTMLButtonElement).hidden = true;
     if (!model) {
       overlays.clear();
-      renderHouseDots(plainDots, visible, removeHouse);
+      renderHouseDots(plainDots, visible, removeHouse, selected);
+      renderSelection(a);
       renderPanel($('panel'), [], 0, tol, []);
       return;
     }
     plainDots.clearLayers();
     const handlers: OverlayHandlers = { onRemoveHouse: removeHouse, onSegment: openSegmentMenu, onMoveHouse: reassignHouse, onToggleHouseLock: toggleLockHouse };
-    overlays.render(model, a, tours, new Set(s.locked), handlers, new Set(model.disconnected), new Set(s.lockedHouses), s.config.groups);
+    overlays.render(model, a, tours, new Set(s.locked), handlers, new Set(model.disconnected), new Set(s.lockedHouses), s.config.groups, selected);
+    renderSelection(a);
 
     const groups = s.config.groups;
     const sizes: number[] = Array(groups).fill(0);
@@ -124,6 +135,70 @@ export function initApp(ctx: {
     if (flagged > 0) warnings.push(`${flagged} buildings have no address — review them on the map.`);
     renderPanel($('panel'), stats, visible.length / groups, tol, warnings, split);
   }
+
+  function renderSelection(a: number[]): void {
+    const s = store.state;
+    const ids = [...selected];
+    const sum = selectionSummary(ids, s.assignment, s.config.groups);
+    const locked = new Set(s.lockedHouses);
+    renderSelectionPanel($('select-panel'), ids.length === 0 ? null : {
+      count: ids.length,
+      groups: s.config.groups,
+      counts: sum.counts,
+      unassigned: sum.unassigned,
+      canMove: a.some((g) => g >= 0),
+      allLocked: ids.every((id) => locked.has(id)),
+    }, {
+      onMove: moveSelected,
+      onToggleLock: () => { store.update((st) => { toggleHousesLock(st, [...selected]); }); },
+      onClear: clearSelection,
+    });
+  }
+
+  function setSelection(ids: Set<string>): void {
+    selected = ids;
+    draw(assignIdx());
+  }
+
+  function clearSelection(): void {
+    if (selected.size > 0) setSelection(new Set());
+  }
+
+  /** ONE undoable update and one refresh; the selection is cleared afterwards so the highlight does not linger on the new colours. */
+  function moveSelected(group: number): void {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    selected = new Set();
+    store.update((st) => moveHouses(st, ids, group));
+    const sizes: number[] = Array(store.state.config.groups).fill(0);
+    assignIdx().forEach((g) => { if (g >= 0 && g < sizes.length) sizes[g]++; });
+    const mean = visible.length / sizes.length;
+    const tol = effectiveTolerance(mean, store.state.config.weights);
+    const off = sizes.some((n) => Math.abs(n - mean) > tol);
+    status(`Moved ${ids.length} house${ids.length === 1 ? '' : 's'} to Group ${group + 1} — sizes ${sizes.join('/')}${off ? '; allowed, but unbalanced' : ''}`);
+  }
+
+  const select = new AreaSelect(map, {
+    isBlocked: () => isAdding() || isDrawing(),
+    onSelect: (b, additive) => {
+      const ids = housesInBounds(visible, { south: b.getSouth(), west: b.getWest(), north: b.getNorth(), east: b.getEast() }, store.state.removed);
+      setSelection(additive ? new Set([...selected, ...ids]) : new Set(ids));
+      status(ids.length === 0 ? 'No houses in that area.' : `${selected.size} houses selected.`);
+    },
+    onClear: clearSelection,
+    onModeChange: (on) => { $('select-area').classList.toggle('active', on); },
+  });
+  $('select-area').addEventListener('click', () => {
+    if (!select.toggle()) status('Finish adding houses or drawing the boundary before selecting an area.');
+  });
+  const panelEl = $('select-panel');
+  L.DomEvent.disableClickPropagation(panelEl);
+  L.DomEvent.disableScrollPropagation(panelEl);
+  map.on('click', (e) => {
+    // A plain click on empty map clears the selection (clicks bubbling up from street lines do not).
+    if ((e as unknown as { propagatedFrom?: unknown }).propagatedFrom) return;
+    if (!isAdding() && !isDrawing()) clearSelection();
+  });
 
   async function solveNow(fresh: boolean): Promise<void> {
     const m = model;

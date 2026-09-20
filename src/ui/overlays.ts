@@ -31,7 +31,7 @@ export class Overlays {
     this.dots.clearLayers();
   }
 
-  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers, disconnected: Set<number> = new Set(), lockedHouses: Set<string> = new Set(), groups = 0): void {
+  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers, disconnected: Set<number> = new Set(), lockedHouses: Set<string> = new Set(), groups = 0, selected: Set<string> = new Set()): void {
     this.clear();
 
     // Majority group per street segment.
@@ -119,6 +119,10 @@ export class Overlays {
         dot.bindTooltip(house.label);
       }
       dot.addTo(this.dots);
+      if (selected.has(house.id)) {
+        // Bright cyan halo = part of the area selection (distinct from the dark locked ring and the red disconnected ring).
+        L.circleMarker([house.lat, house.lon], { radius: 9, color: '#00e5ff', weight: 3, fillColor: '#00e5ff', fillOpacity: 0.25, interactive: false }).addTo(this.dots);
+      }
       if (houseLocked) {
         // Thick dark ring = locked house (the optimizer keeps it in its group). Non-interactive so the dot stays clickable.
         L.circleMarker([house.lat, house.lon], { radius: 7, color: '#111', weight: 3, fill: false, interactive: false }).addTo(this.dots);

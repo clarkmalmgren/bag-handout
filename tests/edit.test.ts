@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Store, emptyState } from '../src/state';
-import { adoptNearest, moveHouse, toggleHouseLock, lockedFlags, solveIsStale, mergeFetched, inputSignature, visibleHouses, confirmFetchReplaces } from '../src/edit';
+import { adoptNearest, moveHouse, toggleHouseLock, lockedFlags, solveIsStale, mergeFetched, inputSignature, visibleHouses, confirmFetchReplaces, housesInBounds, moveHouses, toggleHousesLock, selectionSummary } from '../src/edit';
 import type { House } from '../src/types';
 
 const h = (id: string, manual: boolean): House => ({ id, lat: 0, lon: 0, label: id, street: '', flagged: false, manual });
@@ -121,5 +121,51 @@ describe('single-house move and lock', () => {
     expect(lockedFlags(hs, ['s1', 's1', 's2'], ['s1'], ['c'])).toEqual([true, true, true]);
     expect(lockedFlags(hs, ['s1', 's1', 's2'], [], ['b'])).toEqual([false, true, false]);
     expect(lockedFlags(hs, ['s1', 's1', 's2'], [], [])).toEqual([false, false, false]);
+  });
+});
+
+describe('area selection', () => {
+  const at = (id: string, lat: number, lon: number): House => ({ ...h(id, false), lat, lon });
+  const hs = [at('a', 1, 1), at('b', 2, 2), at('c', 5, 5), at('d', 0, 0)];
+  const box = { south: 0, west: 0, north: 2, east: 2 };
+  it('selects inside and on the edge, not outside', () => {
+    expect(housesInBounds(hs, box)).toEqual(['a', 'b', 'd']);
+  });
+  it('excludes removed houses', () => {
+    expect(housesInBounds(hs, box, ['b'])).toEqual(['a', 'd']);
+  });
+  it('moveHouses is one undo step', () => {
+    const store = new Store(emptyState());
+    store.state.assignment = { a: 0, b: 0, c: 1 };
+    store.update((s) => moveHouses(s, ['a', 'b'], 1));
+    expect(store.state.assignment).toEqual({ a: 1, b: 1, c: 1 });
+    expect(store.undo()).toBe(true);
+    expect(store.state.assignment).toEqual({ a: 0, b: 0, c: 1 });
+  });
+  it('moveHouses assigns unassigned houses', () => {
+    const s = { assignment: {} as Record<string, number> };
+    moveHouses(s, ['x'], 2);
+    expect(s.assignment).toEqual({ x: 2 });
+  });
+  it('toggleHousesLock locks all unless all are locked', () => {
+    const s = { lockedHouses: ['a'] };
+    expect(toggleHousesLock(s, ['a', 'b'])).toBe(true);
+    expect(s.lockedHouses.sort()).toEqual(['a', 'b']);
+    expect(toggleHousesLock(s, ['a', 'b'])).toBe(false);
+    expect(s.lockedHouses).toEqual([]);
+    expect(toggleHousesLock(s, [])).toBe(false);
+  });
+  it('toggleHousesLock unlock keeps other locks; undoable', () => {
+    const store = new Store(emptyState());
+    store.state.lockedHouses = ['z'];
+    store.update((s) => { toggleHousesLock(s, ['a', 'b']); });
+    expect(store.state.lockedHouses).toEqual(['z', 'a', 'b']);
+    store.update((s) => { toggleHousesLock(s, ['a', 'b']); });
+    expect(store.state.lockedHouses).toEqual(['z']);
+    store.undo(); store.undo();
+    expect(store.state.lockedHouses).toEqual(['z']);
+  });
+  it('selectionSummary counts groups and unassigned', () => {
+    expect(selectionSummary(['a', 'b', 'c', 'd'], { a: 0, b: 2, c: 2 }, 3)).toEqual({ counts: [1, 0, 2], unassigned: 1 });
   });
 });
