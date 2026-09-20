@@ -9,7 +9,7 @@ import { groupStats, splitStreetCount } from './stats';
 import { effectiveTolerance } from './solver/cost';
 import { Overlays, type OverlayHandlers } from './ui/overlays';
 import { colorOf, renderPanel } from './ui/groups';
-import { adoptNearest, inputSignature, solveIsStale, visibleHouses } from './edit';
+import { adoptNearest, inputSignature, lockedFlags, moveHouse, toggleHouseLock, solveIsStale, visibleHouses } from './edit';
 import { renderHouseDots } from './ui/houseEdit';
 
 export interface AppView {
@@ -102,8 +102,8 @@ export function initApp(ctx: {
       return;
     }
     plainDots.clearLayers();
-    const handlers: OverlayHandlers = { onRemoveHouse: removeHouse, onSegment: openSegmentMenu };
-    overlays.render(model, a, tours, new Set(s.locked), handlers, new Set(model.disconnected));
+    const handlers: OverlayHandlers = { onRemoveHouse: removeHouse, onSegment: openSegmentMenu, onMoveHouse: reassignHouse, onToggleHouseLock: toggleLockHouse };
+    overlays.render(model, a, tours, new Set(s.locked), handlers, new Set(model.disconnected), new Set(s.lockedHouses), s.config.groups);
 
     const groups = s.config.groups;
     const sizes: number[] = Array(groups).fill(0);
@@ -137,7 +137,6 @@ export function initApp(ctx: {
     // treat the current assignment as usable when every group has at least one house.
     const complete = a.every((g) => g >= 0 && g < s.config.groups) && new Set(a).size === s.config.groups;
     const usable = !fresh && complete;
-    const lockedKeys = new Set(s.locked);
     const problem: SolveProblem = {
       distMatrix: m.dist,
       houseCount: houses.length,
@@ -148,7 +147,7 @@ export function initApp(ctx: {
       seed: s.config.seed,
       iterations: s.config.iterations,
       initial: usable ? a : undefined,
-      locked: usable ? m.snaps.map((sn) => lockedKeys.has(m.graph.segments[sn.segment].key)) : undefined,
+      locked: usable ? lockedFlags(houses, m.snaps.map((sn) => m.graph.segments[sn.segment].key), s.locked, s.lockedHouses) : undefined,
     };
     const iterations = s.config.iterations;
     const note = !fresh && !complete ? 'No valid current assignment — solving from scratch. ' : '';
@@ -207,12 +206,28 @@ export function initApp(ctx: {
         if (sn.segment === segmentId) st.assignment[houses[i].id] = group;
       });
     });
+    reportBalance();
+  }
+
+  function reportBalance(): void {
     const sizes: number[] = Array(store.state.config.groups).fill(0);
     assignIdx().forEach((g) => { if (g >= 0 && g < sizes.length) sizes[g]++; });
-    const mean = houses.length / sizes.length;
+    const mean = visible.length / sizes.length;
     const tol = effectiveTolerance(mean, store.state.config.weights);
     const off = sizes.findIndex((n) => Math.abs(n - mean) > tol);
     status(off >= 0 ? `Group ${off + 1} is now ${sizes[off]} houses (mean ${mean.toFixed(1)}) — allowed, but unbalanced` : 'Moved');
+  }
+
+  /** Moves ONE house to a group as a single undoable edit; refresh() re-routes only the two touched groups via the tour cache. */
+  function reassignHouse(houseId: string, group: number): void {
+    map.closePopup();
+    store.update((st) => moveHouse(st, houseId, group));
+    reportBalance();
+  }
+
+  function toggleLockHouse(houseId: string): void {
+    map.closePopup();
+    store.update((st) => { toggleHouseLock(st, houseId); });
   }
 
   function toggleLock(segmentId: number): void {

@@ -127,6 +127,8 @@ export function parseProject(text: string): ProjectState {
     removed: parseStringArray(o.removed, 'removed'),
     assignment: parseAssignment(o.assignment),
     locked: parseStringArray(o.locked, 'locked'),
+    // Absent in files saved before per-house locks. Ids of houses that no longer exist are harmless (never matched).
+    lockedHouses: parseStringArray(o.lockedHouses, 'lockedHouses'),
     config: parseConfig(o.config),
   };
 }

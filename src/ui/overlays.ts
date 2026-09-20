@@ -8,6 +8,10 @@ export interface OverlayHandlers {
   onSegment?(segmentId: number, at: L.LatLng): void;
   /** Remove button in a house popup (keeps the Task 3 remove-house behaviour). */
   onRemoveHouse?(houseId: string): void;
+  /** Group button in a house popup: move just this house. */
+  onMoveHouse?(houseId: string, group: number): void;
+  /** Lock/Unlock button in a house popup. */
+  onToggleHouseLock?(houseId: string): void;
 }
 
 export class Overlays {
@@ -27,7 +31,7 @@ export class Overlays {
     this.dots.clearLayers();
   }
 
-  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers, disconnected: Set<number> = new Set()): void {
+  render(m: Model, assign: number[], tours: Tour[], lockedKeys: Set<string>, h: OverlayHandlers, disconnected: Set<number> = new Set(), lockedHouses: Set<string> = new Set(), groups = 0): void {
     this.clear();
 
     // Majority group per street segment.
@@ -71,19 +75,54 @@ export class Overlays {
         interactive: true,
         bubblingMouseEvents: false,
       });
+      const houseLocked = lockedHouses.has(house.id);
       if (h.onRemoveHouse) {
+        // Built with DOM APIs / text nodes only: address labels are untrusted text.
         const box = document.createElement('div');
-        box.append(document.createTextNode(house.label));
-        const btn = document.createElement('button');
-        btn.textContent = 'Remove';
-        btn.style.marginLeft = '8px';
-        btn.addEventListener('click', () => h.onRemoveHouse!(house.id));
-        box.append(btn);
+        box.className = 'house-menu';
+        const title = document.createElement('div');
+        title.append(document.createTextNode(house.label));
+        const rm = document.createElement('button');
+        rm.textContent = 'Remove';
+        rm.style.marginLeft = '8px';
+        rm.addEventListener('click', () => h.onRemoveHouse!(house.id));
+        title.append(rm);
+        box.append(title);
+        if (h.onMoveHouse && groups > 0) {
+          const row = document.createElement('div');
+          row.className = 'house-groups';
+          if (assign[i] < 0) {
+            row.textContent = 'Not assigned yet: Solve first, then move it to a group here.';
+          } else {
+            for (let g = 0; g < groups; g++) {
+              const b = document.createElement('button');
+              b.textContent = String(g + 1);
+              b.title = `Move this house to group ${g + 1}`;
+              b.style.borderLeft = `10px solid ${colorOf(g)}`;
+              b.disabled = g === assign[i];
+              b.addEventListener('click', () => h.onMoveHouse!(house.id, g));
+              row.append(b);
+            }
+          }
+          box.append(row);
+        }
+        if (h.onToggleHouseLock) {
+          const lk = document.createElement('button');
+          lk.className = 'house-lock';
+          lk.textContent = houseLocked ? 'Unlock house' : 'Lock house';
+          lk.title = houseLocked ? 'Locked: Re-optimize will not move this house. Click to let it move.' : 'Re-optimize will not move a locked house';
+          lk.addEventListener('click', () => h.onToggleHouseLock!(house.id));
+          box.append(lk);
+        }
         dot.bindPopup(box);
       } else {
         dot.bindTooltip(house.label);
       }
       dot.addTo(this.dots);
+      if (houseLocked) {
+        // Thick dark ring = locked house (the optimizer keeps it in its group). Non-interactive so the dot stays clickable.
+        L.circleMarker([house.lat, house.lon], { radius: 7, color: '#111', weight: 3, fill: false, interactive: false }).addTo(this.dots);
+      }
       if (disconnected.has(i)) {
         // Red ring: cut off from the main street network. Non-interactive so the dot above stays clickable.
         L.circleMarker([house.lat, house.lon], { radius: 10, color: '#dc2626', weight: 3, fill: false, interactive: false }).addTo(this.dots);

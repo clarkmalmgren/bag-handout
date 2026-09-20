@@ -36,8 +36,8 @@ export interface SolveContext {
 }
 
 /** Cheap signature of the user-editable solver inputs; any manual edit or undo during a solve changes it. */
-export function inputSignature(s: { assignment: Record<string, number>; locked: string[]; removed: string[] }): string {
-  return JSON.stringify(s.assignment) + '|' + s.locked.join('\u0001') + '|' + s.removed.join('\u0001');
+export function inputSignature(s: { assignment: Record<string, number>; locked: string[]; removed: string[]; lockedHouses?: string[] }): string {
+  return JSON.stringify(s.assignment) + '|' + s.locked.join('\u0001') + '|' + s.removed.join('\u0001') + '|' + (s.lockedHouses ?? []).join('\u0001');
 }
 
 /** True when the world a solve started in is gone (different project, group count, house set, road data, or an edit/undo of assignment, locks or removals). */
@@ -64,4 +64,27 @@ export function visibleHouses(s: { houses: House[]; removed: string[] }): House[
 export function confirmFetchReplaces(assignment: Record<string, number>, confirmFn: (m: string) => boolean = (m) => window.confirm(m)): boolean {
   if (Object.keys(assignment).length === 0) return true;
   return confirmFn('Fetching replaces all group assignments. Undo can restore them. Continue?');
+}
+
+/** Moves one house to a group (a single undoable store update when called inside Store.update). */
+export function moveHouse(s: { assignment: Record<string, number> }, id: string, group: number): void {
+  s.assignment[id] = group;
+}
+
+/** Flips the per-house lock; returns true when the house is now locked. */
+export function toggleHouseLock(s: { lockedHouses: string[] }, id: string): boolean {
+  const i = s.lockedHouses.indexOf(id);
+  if (i >= 0) {
+    s.lockedHouses.splice(i, 1);
+    return false;
+  }
+  s.lockedHouses.push(id);
+  return true;
+}
+
+/** Per-house "optimizer must not move" flags: a house is locked by its own lock or by its street segment's lock. */
+export function lockedFlags(houses: { id: string }[], segmentKeyOf: string[], lockedKeys: string[], lockedHouses: string[]): boolean[] {
+  const keys = new Set(lockedKeys);
+  const ids = new Set(lockedHouses);
+  return houses.map((h, i) => keys.has(segmentKeyOf[i]) || ids.has(h.id));
 }

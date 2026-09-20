@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { adoptNearest, solveIsStale, mergeFetched, inputSignature, visibleHouses, confirmFetchReplaces } from '../src/edit';
+import { Store, emptyState } from '../src/state';
+import { adoptNearest, moveHouse, toggleHouseLock, lockedFlags, solveIsStale, mergeFetched, inputSignature, visibleHouses, confirmFetchReplaces } from '../src/edit';
 import type { House } from '../src/types';
 
 const h = (id: string, manual: boolean): House => ({ id, lat: 0, lon: 0, label: id, street: '', flagged: false, manual });
@@ -38,7 +39,7 @@ describe('adoptNearest', () => {
 
 describe('solveIsStale', () => {
   const s = {};
-  const inputs = { assignment: { a: 0, b: 1 } as Record<string, number>, locked: ['Row 0:1-2'], removed: ['x'] };
+  const inputs = { assignment: { a: 0, b: 1 } as Record<string, number>, locked: ['Row 0:1-2'], removed: ['x'], lockedHouses: [] as string[] };
   const ctx = (i = inputs) => ({ state: s, groups: 4, modelKey: 'k', osm: null, inputs: inputSignature(i) });
   const base = ctx();
   it('is fresh when nothing changed', () => expect(solveIsStale(base, ctx({ ...inputs, assignment: { ...inputs.assignment } }))).toBe(false));
@@ -53,6 +54,9 @@ describe('solveIsStale', () => {
   });
   it('detects a lock change', () => {
     expect(solveIsStale(base, ctx({ ...inputs, locked: [] }))).toBe(true);
+  });
+  it('detects a house lock change', () => {
+    expect(solveIsStale(base, ctx({ ...inputs, lockedHouses: ['a'] }))).toBe(true);
   });
   it('detects a removed change', () => {
     expect(solveIsStale(base, ctx({ ...inputs, removed: ['x', 'y'] }))).toBe(true);
@@ -84,5 +88,38 @@ describe('confirmFetchReplaces', () => {
     const ask = vi.fn(() => true);
     expect(confirmFetchReplaces({ a: 0 }, ask)).toBe(true);
     expect(ask).toHaveBeenCalledWith('Fetching replaces all group assignments. Undo can restore them. Continue?');
+  });
+});
+
+describe('single-house move and lock', () => {
+  it('moves one house as one undoable edit and lock toggles undo too', () => {
+    const store = new Store(emptyState());
+    store.update((s) => { s.assignment = { a: 0, b: 0, c: 1 }; });
+    store.update((s) => moveHouse(s, 'b', 1));
+    expect(store.state.assignment).toEqual({ a: 0, b: 1, c: 1 });
+    // group sizes (the inputs of stats/tour re-routing) change only for the two touched groups
+    const sizes = (a: Record<string, number>) => [0, 1].map((g) => Object.values(a).filter((x) => x === g).length);
+    expect(sizes(store.state.assignment)).toEqual([1, 2]);
+    expect(store.undo()).toBe(true);
+    expect(store.state.assignment).toEqual({ a: 0, b: 0, c: 1 });
+    expect(sizes(store.state.assignment)).toEqual([2, 1]);
+    store.update((s) => { toggleHouseLock(s, 'a'); });
+    expect(store.state.lockedHouses).toEqual(['a']);
+    store.undo();
+    expect(store.state.lockedHouses).toEqual([]);
+    store.redo();
+    expect(store.state.lockedHouses).toEqual(['a']);
+  });
+  it('toggleHouseLock reports the new state', () => {
+    const s = { lockedHouses: [] as string[] };
+    expect(toggleHouseLock(s, 'x')).toBe(true);
+    expect(toggleHouseLock(s, 'x')).toBe(false);
+    expect(s.lockedHouses).toEqual([]);
+  });
+  it('lockedFlags ORs segment locks and house locks', () => {
+    const hs = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(lockedFlags(hs, ['s1', 's1', 's2'], ['s1'], ['c'])).toEqual([true, true, true]);
+    expect(lockedFlags(hs, ['s1', 's1', 's2'], [], ['b'])).toEqual([false, true, false]);
+    expect(lockedFlags(hs, ['s1', 's1', 's2'], [], [])).toEqual([false, false, false]);
   });
 });

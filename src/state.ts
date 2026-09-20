@@ -12,6 +12,8 @@ export interface ProjectState {
   assignment: Record<string, number>;
   /** locked segment keys (see Segment.key in graph/build.ts) */
   locked: string[];
+  /** ids of individual houses the optimizer must not move */
+  lockedHouses: string[];
   config: Config;
 }
 
@@ -35,12 +37,13 @@ export function emptyState(): ProjectState {
     removed: [],
     assignment: {},
     locked: [],
+    lockedHouses: [],
     config: defaultConfig(),
   };
 }
 
 /** The slice of state covered by undo/redo. */
-type Undoable = Pick<ProjectState, 'houses' | 'removed' | 'assignment' | 'locked'>;
+type Undoable = Pick<ProjectState, 'houses' | 'removed' | 'assignment' | 'locked' | 'lockedHouses'>;
 
 const MAX_HISTORY = 100;
 
@@ -62,8 +65,8 @@ export class Store {
   }
 
   private snapshot(): string {
-    const { houses, removed, assignment, locked } = this.state;
-    const u: Undoable = { houses, removed, assignment, locked };
+    const { houses, removed, assignment, locked, lockedHouses } = this.state;
+    const u: Undoable = { houses, removed, assignment, locked, lockedHouses };
     return JSON.stringify(u);
   }
 

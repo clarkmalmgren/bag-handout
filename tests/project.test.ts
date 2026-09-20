@@ -177,3 +177,17 @@ describe('parseProject validation', () => {
     expect(parseProject(serializeProject(s))).toEqual(s);
   });
 });
+
+describe('lockedHouses', () => {
+  it('round-trips', () => {
+    const s = emptyState();
+    s.lockedHouses = ['w1', 'w2'];
+    expect(parseProject(serializeProject(s)).lockedHouses).toEqual(['w1', 'w2']);
+  });
+  it('loads an old file without the field as empty', () => {
+    expect(parseProject('{"version":1,"locked":["k"]}').lockedHouses).toEqual([]);
+  });
+  it('rejects a non-string-array', () => {
+    expect(() => parseProject('{"version":1,"lockedHouses":[1]}')).toThrow(/lockedHouses must be/);
+  });
+});

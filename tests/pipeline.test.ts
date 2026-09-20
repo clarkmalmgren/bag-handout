@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { syntheticGrid } from './fixtures/synthetic';
 import { buildModel } from '../src/model';
 import { solve, routeGroups, type SolveProblem } from '../src/solver/solve';
+import { lockedFlags } from '../src/edit';
 import { DEFAULT_WEIGHTS, violation, score, effectiveTolerance } from '../src/solver/cost';
 
 const GROUPS = 4;
@@ -79,6 +80,22 @@ describe('solve pipeline on the synthetic grid', () => {
     for (const i of lockedIdx) expect(sol.assign[i]).toBe(start[i]);
     // and the run is not a no-op: some unlocked house did move.
     expect(sol.assign.some((g, i) => !locked[i] && g !== start[i])).toBe(true);
+  });
+
+  it('a locked house never changes group across seeds, while unlocked ones do move', () => {
+    let moved = 0;
+    for (const seed of [2, 3, 4, 5]) {
+      const start = solve(problem(0, { seed })).assign;
+      const free = solve(problem(3000, { seed, initial: start })).assign;
+      const movers = start.map((g, i) => (free[i] !== g ? i : -1)).filter((i) => i >= 0);
+      // lock (via the same per-house flags the app builds) every house that moves when unlocked, plus a few others
+      const lockedIdx = new Set<number>([...movers.slice(0, Math.ceil(movers.length / 2)), 0, 1]);
+      const locked = lockedFlags(houses, model.snaps.map((sn) => model.graph.segments[sn.segment].key), [], [...lockedIdx].map((i) => houses[i].id));
+      const sol = solve(problem(3000, { seed, initial: start, locked }));
+      for (const i of lockedIdx) expect(sol.assign[i]).toBe(start[i]);
+      moved += sol.assign.filter((g, i) => !locked[i] && g !== start[i]).length;
+    }
+    expect(moved).toBeGreaterThan(0);
   });
 
   it('reseeds when the initial assignment is invalid', () => {

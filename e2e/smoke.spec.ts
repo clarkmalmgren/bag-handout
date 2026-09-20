@@ -94,6 +94,23 @@ test('load synthetic project, solve into 4 balanced groups, edit a street, open 
   await expect.poll(() => groupCounts(page)).toEqual(counts);
   expect(await groupLengths(page)).toEqual(lengths); // returning to the old membership reuses the cached tours
 
+  // Single-house move: click house dots until a house popup opens (NOT RUN in the authoring environment).
+  const hm = page.locator('.house-menu').last();
+  let opened = false;
+  for (let dx = -200; dx <= 200 && !opened; dx += 7) {
+    for (const dy of [-10, 0, 10]) {
+      await page.mouse.click(cx + dx, cy + dy);
+      if (await hm.isVisible()) { opened = true; break; }
+    }
+  }
+  if (opened) {
+    const target = hm.locator('.house-groups button:not([disabled])').first();
+    await target.click();
+    expect((await groupCounts(page)).reduce((a, b) => a + b, 0)).toBe(120);
+    await page.click('#undo');
+    await expect.poll(() => groupCounts(page)).toEqual(counts);
+  }
+
   await page.click('#export-print');
   await expect(page.locator('.print-page')).toHaveCount(5); // overview + 4 groups
 });
